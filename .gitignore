@@ -1,0 +1,120 @@
+# =========================
+# GENERAL
+# =========================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# =========================
+# PYTHON (FASTAPI BACKEND)
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.env/
+.venv/
+venv/
+ENV/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing / coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Type checking / linting
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# IDEs
+.vscode/
+.idea/
+
+# =========================
+# DATABASE / LOCAL DEV
+# =========================
+*.sqlite3
+*.db
+
+# Alembic (optional: keep migrations if you use them)
+# migrations/versions/*.pyc
+
+# PostgreSQL dumps / backups
+*.sql
+*.dump
+
+# =========================
+# NODE / FRONTEND (REACT + VITE)
+# =========================
+node_modules/
+dist/
+build/
+
+# Vite
+.vite/
+vite.config.ts.timestamp-*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# =========================
+# TESTING
+# =========================
+coverage/
+jest-coverage/
+
+# =========================
+# CSS MODULES (GENERATED TYPES)
+# =========================
+*.module.css.d.ts
+
+# =========================
+# DOCKER (OPTIONAL)
+# =========================
+docker-compose.override.yml
+
+# =========================
+# MISC
+# =========================
+*.pem
+*.key
+*.crt
+
+# Mac / Linux trash
+.Trash
+.cache/
+
+# Temporary files
+tmp/
+temp/
