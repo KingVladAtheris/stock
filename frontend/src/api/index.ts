@@ -1,4 +1,4 @@
-import type { Company, CompanyCreate, Seller, SellerCreate, Transaction, TransactionCreate, DailyReport } from '../types';
+import type { Company, CompanyCreate, Seller, SellerCreate, Transaction, TransactionCreate, DailyReport, DaySummary, MonthSummary } from '../types';
 
 const BASE = 'http://localhost:8000';
 
@@ -9,9 +9,9 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `HTTP ${res.status}`);
+    throw new Error((err as { detail?: string }).detail ?? `HTTP ${res.status}`);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 // Companies
@@ -47,3 +47,11 @@ export const getActiveDays = (companyId: number) =>
 // Daily report
 export const getDailyReport = (companyId: number, day: string) =>
   req<DailyReport>(`/companies/${companyId}/days/${day}`);
+
+// Monthly summary
+export const getMonthlySummary = (companyId: number, year: number, month: number) =>
+  req<DaySummary[]>(`/companies/${companyId}/summary/month/${year}/${month}`);
+
+// Yearly summary
+export const getYearlySummary = (companyId: number, year: number) =>
+  req<MonthSummary[]>(`/companies/${companyId}/summary/year/${year}`);

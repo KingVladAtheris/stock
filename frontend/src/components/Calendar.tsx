@@ -1,30 +1,49 @@
+// src/components/Calendar.tsx
 import { useState } from 'react';
-import type { DailyReport } from '../types';
 import styles from './Calendar.module.css';
 
 interface Props {
   companyName: string;
-  activeDays: Set<string>; // ISO date strings that have data
+  activeDays: Set<string>;
   onDayClick: (date: string) => void;
   onBack: () => void;
+  onMonthSummary: (year: number, month: number) => void;
+  onYearSummary: (year: number) => void;
 }
 
-const MONTHS = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+const MONTHS = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie',
+                'Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 const DAYS = ['Lu','Ma','Mi','Jo','Vi','Sâ','Du'];
 
 function isoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-export default function Calendar({ companyName, activeDays, onDayClick, onBack }: Props) {
+type PickerMode = 'month' | 'year' | null;
+
+export default function Calendar({
+  companyName, activeDays, onDayClick, onBack,
+  onMonthSummary, onYearSummary,
+}: Props) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-  // Convert Sunday=0 to Monday=0
+  // Picker state
+  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(today.getMonth() + 1); // 1-based
+
+  const firstDay = new Date(year, month, 1).getDay();
   const startOffset = (firstDay + 6) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayIso = isoDate(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const cells: (number | null)[] = [
+    ...Array(startOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
 
   const prevMonth = () => {
     if (month === 0) { setMonth(11); setYear(y => y - 1); }
@@ -35,14 +54,20 @@ export default function Calendar({ companyName, activeDays, onDayClick, onBack }
     else setMonth(m => m + 1);
   };
 
-  const todayIso = isoDate(today.getFullYear(), today.getMonth(), today.getDate());
+  const openPicker = (mode: PickerMode) => {
+    setPickerYear(today.getFullYear());
+    setPickerMonth(today.getMonth() + 1);
+    setPickerMode(mode);
+  };
 
-  const cells: (number | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  // Pad to complete last row
-  while (cells.length % 7 !== 0) cells.push(null);
+  const confirmPicker = () => {
+    if (pickerMode === 'month') onMonthSummary(pickerYear, pickerMonth);
+    else if (pickerMode === 'year') onYearSummary(pickerYear);
+    setPickerMode(null);
+  };
+
+  const currentYear = today.getFullYear();
+  const yearOptions = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
   return (
     <div className={styles.page}>
@@ -62,7 +87,6 @@ export default function Calendar({ companyName, activeDays, onDayClick, onBack }
         <div className={styles.dayHeaders}>
           {DAYS.map(d => <div key={d} className={styles.dayHeader}>{d}</div>)}
         </div>
-
         <div className={styles.grid}>
           {cells.map((day, i) => {
             if (!day) return <div key={i} className={styles.cellEmpty} />;
@@ -83,10 +107,71 @@ export default function Calendar({ companyName, activeDays, onDayClick, onBack }
         </div>
       </div>
 
-      <div className={styles.legend}>
-        <span className={styles.legendItem}><span className={`${styles.legendDot} ${styles.legendDotActive}`} /> Zi cu date</span>
-        <span className={styles.legendItem}><span className={`${styles.legendDot} ${styles.legendDotEmpty}`} /> Zi fără date</span>
+      {/* Summary panel */}
+      <div className={styles.summaryPanel}>
+        <span className={styles.summaryPanelLabel}>Rapoarte</span>
+        <div className={styles.summaryBtns}>
+          <button className={styles.summaryBtn} onClick={() => openPicker('month')}>
+            <span className={styles.summaryBtnIcon}>📅</span> Lunar
+          </button>
+          <button className={styles.summaryBtn} onClick={() => openPicker('year')}>
+            <span className={styles.summaryBtnIcon}>📊</span> Anual
+          </button>
+        </div>
       </div>
+
+      <div className={styles.legend}>
+        <span className={styles.legendItem}>
+          <span className={`${styles.legendDot} ${styles.legendDotActive}`} /> Zi cu date
+        </span>
+        <span className={styles.legendItem}>
+          <span className={`${styles.legendDot} ${styles.legendDotEmpty}`} /> Zi fără date
+        </span>
+      </div>
+
+      {/* Picker modal */}
+      {pickerMode && (
+        <div className={styles.pickerBackdrop} onClick={e => e.target === e.currentTarget && setPickerMode(null)}>
+          <div className={styles.pickerModal}>
+            <h3 className={styles.pickerTitle}>
+              {pickerMode === 'month' ? 'Selectează luna' : 'Selectează anul'}
+            </h3>
+
+            {pickerMode === 'month' && (
+              <div className={styles.pickerField}>
+                <label className={styles.pickerLabel}>Luna</label>
+                <select
+                  className={styles.pickerSelect}
+                  value={pickerMonth}
+                  onChange={e => setPickerMonth(Number(e.target.value))}
+                >
+                  {MONTHS.map((m, i) => (
+                    <option key={i} value={i + 1}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className={styles.pickerField}>
+              <label className={styles.pickerLabel}>Anul</label>
+              <select
+                className={styles.pickerSelect}
+                value={pickerYear}
+                onChange={e => setPickerYear(Number(e.target.value))}
+              >
+                {yearOptions.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.pickerActions}>
+              <button className={styles.pickerCancel} onClick={() => setPickerMode(null)}>Anulare</button>
+              <button className={styles.pickerConfirm} onClick={confirmPicker}>Vezi raportul</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

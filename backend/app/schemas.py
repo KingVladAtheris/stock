@@ -71,3 +71,26 @@ class DailyReport(BaseModel):
     net_inventory_change: Decimal
     stock_end_of_day: Decimal
     previous_stock: Decimal
+
+
+class DaySummary(BaseModel):
+    """One row in a monthly summary — totals for a single calendar day."""
+    date: str                  # ISO string "YYYY-MM-DD"
+    total_purchase: Decimal
+    total_resale: Decimal
+    total_markup: Decimal
+    total_sale: Decimal
+    net_change: Decimal
+    stock_end_of_day: Decimal
+
+
+class MonthSummary(BaseModel):
+    """One row in a yearly summary — totals for a single calendar month."""
+    month: int                 # 1–12
+    year: int
+    total_purchase: Decimal
+    total_resale: Decimal
+    total_markup: Decimal
+    total_sale: Decimal
+    net_change: Decimal
+    stock_end_of_month: Decimal

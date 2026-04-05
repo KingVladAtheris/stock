@@ -60,3 +60,24 @@ export interface DailyReport {
   stock_end_of_day: string;
   previous_stock: string;
 }
+
+export interface DaySummary {
+  date: string;           // "YYYY-MM-DD"
+  total_purchase: string;
+  total_resale: string;
+  total_markup: string;
+  total_sale: string;
+  net_change: string;
+  stock_end_of_day: string;
+}
+
+export interface MonthSummary {
+  month: number;          // 1-12
+  year: number;
+  total_purchase: string;
+  total_resale: string;
+  total_markup: string;
+  total_sale: string;
+  net_change: string;
+  stock_end_of_month: string;
+}

@@ -89,10 +89,7 @@ def get_sellers(db: Session = Depends(get_db)):
 
 # ====================== TRANSACTIONS ======================
 
-@app.post(
-    "/companies/{company_id}/days/{day}/transactions",
-    response_model=schemas.Transaction,
-)
+@app.post("/companies/{company_id}/days/{day}/transactions", response_model=schemas.Transaction)
 def add_transaction(
     company_id: int, day: date,
     transaction: schemas.TransactionCreate,
@@ -100,10 +97,7 @@ def add_transaction(
 ):
     return crud.create_transaction(db, company_id, day, transaction)
 
-@app.get(
-    "/companies/{company_id}/days/{day}/transactions",
-    response_model=List[schemas.Transaction],
-)
+@app.get("/companies/{company_id}/days/{day}/transactions", response_model=List[schemas.Transaction])
 def get_transactions(company_id: int, day: date, db: Session = Depends(get_db)):
     return db.query(models.Transaction).filter(
         models.Transaction.company_id == company_id,
@@ -112,8 +106,7 @@ def get_transactions(company_id: int, day: date, db: Session = Depends(get_db)):
 
 @app.put("/companies/{company_id}/transactions/{transaction_id}", response_model=schemas.Transaction)
 def update_transaction(
-    company_id: int,
-    transaction_id: int,
+    company_id: int, transaction_id: int,
     data: schemas.TransactionCreate,
     db: Session = Depends(get_db),
 ):
@@ -127,8 +120,7 @@ def update_transaction(
 
 @app.delete("/companies/{company_id}/transactions/{transaction_id}", status_code=204)
 def delete_transaction(
-    company_id: int,
-    transaction_id: int,
+    company_id: int, transaction_id: int,
     db: Session = Depends(get_db),
 ):
     tx = db.query(models.Transaction).filter(
@@ -143,10 +135,7 @@ def delete_transaction(
 
 # ====================== DAILY SALES ======================
 
-@app.put(
-    "/companies/{company_id}/days/{day}/total-sale",
-    response_model=schemas.DailySalesInputSchema,
-)
+@app.put("/companies/{company_id}/days/{day}/total-sale", response_model=schemas.DailySalesInputSchema)
 def set_total_sale(
     company_id: int, day: date,
     data: schemas.DailySalesInputSchema,
@@ -162,8 +151,7 @@ def get_active_days(company_id: int, db: Session = Depends(get_db)):
     rows = (
         db.query(models.Transaction.date)
         .filter(models.Transaction.company_id == company_id)
-        .distinct()
-        .all()
+        .distinct().all()
     )
     return [r[0].isoformat() for r in rows]
 
@@ -173,6 +161,26 @@ def get_active_days(company_id: int, db: Session = Depends(get_db)):
 @app.get("/companies/{company_id}/days/{day}", response_model=schemas.DailyReport)
 def get_daily_report(company_id: int, day: date, db: Session = Depends(get_db)):
     return crud.get_daily_report(db, company_id, day)
+
+
+# ====================== MONTHLY SUMMARY ======================
+
+@app.get("/companies/{company_id}/summary/month/{year}/{month}", response_model=List[schemas.DaySummary])
+def get_monthly_summary(
+    company_id: int, year: int, month: int,
+    db: Session = Depends(get_db),
+):
+    return crud.get_monthly_summary(db, company_id, year, month)
+
+
+# ====================== YEARLY SUMMARY ======================
+
+@app.get("/companies/{company_id}/summary/year/{year}", response_model=List[schemas.MonthSummary])
+def get_yearly_summary(
+    company_id: int, year: int,
+    db: Session = Depends(get_db),
+):
+    return crud.get_yearly_summary(db, company_id, year)
 
 
 # ====================== UTILITY ======================
