@@ -1,155 +1,192 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Company, Seller, Transaction, TransactionCreate, DailyReport } from '../types';
-import { getDailyReport, getSellers, createTransaction, setTotalSale } from '../api';
+import type {
+  Company, Counterparty, Transaction, TransactionCreate,
+  Exit, ExitCreate, DailyReport,
+} from '../types';
+import { getDailyReport, getCounterparties, createTransaction, createExit } from '../api';
 import SellerSearch from '../components/SellerSearch';
 import styles from './DayView.module.css';
 
 const BASE = 'http://localhost:8000';
 
-interface Props {
-  company: Company;
-  date: string;
-  onBack: () => void;
+interface Props { company: Company; date: string; onBack: () => void; }
+
+// ── Shared editable row shape ─────────────────────────────────────────────
+
+interface EntryRow {
+  seller: Counterparty | null;
+  invoice: string; register: string;
+  purchase_no_tax: string; purchase_tax_amount: string; total_resale: string;
+  // computed
+  c_total_purchase: number; c_resale_no_tax: number;
+  c_resale_vat: number; c_markup: number; c_vat_pct: string;
+  accepted: boolean;
 }
 
-interface EditableRow {
-  seller: Seller | null;
-  invoice: string;
-  register: string;
-  purchase_no_tax: string;
-  purchase_tax_amount: string;
-  total_resale: string;
-  // Computed fields updated after accept — purely local display
-  computed_total_purchase: number;
-  computed_resale_no_tax: number;
-  computed_markup: number;
-  computed_vat: string;
-  accepted: boolean; // true once the user has accepted at least once
+interface ExitRow {
+  buyer: Counterparty | null;
+  document: string;
+  total_sale: string; vat_amount: string;
+  // computed
+  c_no_vat: number;
+  accepted: boolean;
 }
 
-const emptyDraft = (): EditableRow => ({
+const emptyEntry = (): EntryRow => ({
   seller: null, invoice: '', register: '',
   purchase_no_tax: '', purchase_tax_amount: '', total_resale: '',
-  computed_total_purchase: 0, computed_resale_no_tax: 0,
-  computed_markup: 0, computed_vat: '—', accepted: false,
+  c_total_purchase: 0, c_resale_no_tax: 0, c_resale_vat: 0,
+  c_markup: 0, c_vat_pct: '—', accepted: false,
 });
 
-// Given raw string inputs, compute derived display values
-function computeRow(r: EditableRow): Pick<EditableRow,
-  'computed_total_purchase' | 'computed_resale_no_tax' | 'computed_markup' | 'computed_vat'
-> {
+const emptyExit = (): ExitRow => ({
+  buyer: null, document: '',
+  total_sale: '', vat_amount: '',
+  c_no_vat: 0, accepted: false,
+});
+
+// ── Compute helpers ────────────────────────────────────────────────────────
+
+function computeEntry(r: EntryRow): Partial<EntryRow> {
   const pn = parseFloat(r.purchase_no_tax) || 0;
   const tn = parseFloat(r.purchase_tax_amount) || 0;
   const rs = parseFloat(r.total_resale) || 0;
   const tf = pn > 0 ? 1 + tn / pn : 1;
   const rnt = pn > 0 ? rs / tf : 0;
-  const mu = pn > 0 ? rnt - pn : 0;
-  const vat = pn > 0 ? `${Math.round((tn / pn) * 100)}%` : '—';
   return {
-    computed_total_purchase: pn + tn,
-    computed_resale_no_tax: rnt,
-    computed_markup: mu,
-    computed_vat: vat,
+    c_total_purchase: pn + tn,
+    c_resale_no_tax: rnt,
+    c_resale_vat: rs - rnt,
+    c_markup: pn > 0 ? rnt - pn : 0,
+    c_vat_pct: pn > 0 ? `${Math.round((tn / pn) * 100)}%` : '—',
   };
 }
 
-const txToEditable = (t: Transaction, sellers: Seller[]): EditableRow => {
-  const base: EditableRow = {
-    seller: sellers.find(s => s.id === t.seller_id) ?? null,
-    invoice: t.invoice_number ?? '',
-    register: t.register_entry_number ?? '',
+function computeExit(r: ExitRow): Partial<ExitRow> {
+  const ts = parseFloat(r.total_sale) || 0;
+  const vat = parseFloat(r.vat_amount) || 0;
+  return { c_no_vat: ts - vat };
+}
+
+const entryValid = (r: EntryRow) =>
+  r.seller !== null && parseFloat(r.purchase_no_tax) > 0 && parseFloat(r.total_resale) > 0;
+const exitValid = (r: ExitRow) =>
+  r.buyer !== null && parseFloat(r.total_sale) > 0;
+
+function txToEntry(t: Transaction, cps: Counterparty[]): EntryRow {
+  const base: EntryRow = {
+    seller: cps.find(c => c.id === t.seller_id) ?? null,
+    invoice: t.invoice_number ?? '', register: t.register_entry_number ?? '',
     purchase_no_tax: String(t.purchase_no_tax),
     purchase_tax_amount: String(t.purchase_tax_amount),
     total_resale: String(t.total_resale),
-    computed_total_purchase: 0, computed_resale_no_tax: 0,
-    computed_markup: 0, computed_vat: '—', accepted: true,
+    c_total_purchase: 0, c_resale_no_tax: 0, c_resale_vat: 0,
+    c_markup: 0, c_vat_pct: '—', accepted: true,
   };
-  return { ...base, ...computeRow(base) };
-};
+  return { ...base, ...computeEntry(base) };
+}
+
+function exToExitRow(e: Exit, cps: Counterparty[]): ExitRow {
+  const base: ExitRow = {
+    buyer: cps.find(c => c.id === e.buyer_id) ?? null,
+    document: e.document_number ?? '',
+    total_sale: String(e.total_sale), vat_amount: String(e.vat_amount),
+    c_no_vat: 0, accepted: true,
+  };
+  return { ...base, ...computeExit(base) };
+}
 
 const fmt = (v: string | number) =>
   Number(v).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const rowValid = (r: EditableRow) =>
-  r.seller !== null && parseFloat(r.purchase_no_tax) > 0 && parseFloat(r.total_resale) > 0;
 
 function formatDate(iso: string) {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
 }
 
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function DayView({ company, date, onBack }: Props) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  // Stable order: list of IDs in insertion order
-  const [txOrder, setTxOrder] = useState<number[]>([]);
-  const [sellers, setSellers] = useState<Seller[]>([]);
-  const [draft, setDraft] = useState<EditableRow | null>(null);
-  // editRows: id → editable state (populated when unlocked)
-  const [editRows, setEditRows] = useState<Record<number, EditableRow>>({});
-  const [totalSale, setTotalSaleVal] = useState('');
   const [report, setReport] = useState<DailyReport | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [savingRowId, setSavingRowId] = useState<number | null>(null);
-  const [error, setError] = useState('');
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+
+  // Stable-ordered IDs + editable maps
+  const [txOrder, setTxOrder] = useState<number[]>([]);
+  const [txMap, setTxMap] = useState<Record<number, Transaction>>({});
+  const [entryRows, setEntryRows] = useState<Record<number, EntryRow>>({});
+
+  const [exOrder, setExOrder] = useState<number[]>([]);
+  const [exMap, setExMap] = useState<Record<number, Exit>>({});
+  const [exitRows, setExitRows] = useState<Record<number, ExitRow>>({});
+
+  const [draftEntry, setDraftEntry] = useState<EntryRow | null>(null);
+  const [draftExit, setDraftExit] = useState<ExitRow | null>(null);
+
+  const [entriesOpen, setEntriesOpen] = useState(true);
+  const [exitsOpen, setExitsOpen] = useState(true);
+
   const [locked, setLocked] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Load ───────────────────────────────────────────────────────────────
+
   const load = async () => {
-    const [rep, sels] = await Promise.all([
+    const [rep, cps] = await Promise.all([
       getDailyReport(company.id, date),
-      getSellers(),
+      getCounterparties(),
     ]);
-    // Sort by id to keep stable order
-    const sorted = [...rep.transactions].sort((a, b) => a.id - b.id);
-    setTransactions(sorted);
-    setTxOrder(sorted.map(t => t.id));
-    setSellers(sels);
+    const sortedTx = [...rep.transactions].sort((a, b) => a.id - b.id);
+    const sortedEx = [...rep.exits].sort((a, b) => a.id - b.id);
     setReport(rep);
-    const ts = parseFloat(String(rep.total_sale_input)) || 0;
-    setTotalSaleVal(ts ? String(ts) : '');
-    if (sorted.length > 0 || ts > 0) setLocked(true);
+    setCounterparties(cps);
+    setTxOrder(sortedTx.map(t => t.id));
+    setTxMap(Object.fromEntries(sortedTx.map(t => [t.id, t])));
+    setExOrder(sortedEx.map(e => e.id));
+    setExMap(Object.fromEntries(sortedEx.map(e => [e.id, e])));
+    if (sortedTx.length > 0 || sortedEx.length > 0) setLocked(true);
   };
 
   useEffect(() => { load(); }, [company.id, date]);
 
-  const lock = () => { setLocked(true); setDraft(null); setEditRows({}); };
+  // ── Lock / unlock ──────────────────────────────────────────────────────
 
-  const unlock = (txs: Transaction[], sels: Seller[]) => {
-    const map: Record<number, EditableRow> = {};
-    txs.forEach(t => { map[t.id] = txToEditable(t, sels); });
-    setEditRows(map);
-    setLocked(false);
+  const lock = () => {
+    setLocked(true); setDraftEntry(null); setDraftExit(null);
+    setEntryRows({}); setExitRows({});
   };
 
+  const unlock = () => {
+    const er: Record<number, EntryRow> = {};
+    txOrder.forEach(id => { er[id] = txToEntry(txMap[id], counterparties); });
+    const xr: Record<number, ExitRow> = {};
+    exOrder.forEach(id => { xr[id] = exToExitRow(exMap[id], counterparties); });
+    setEntryRows(er); setExitRows(xr); setLocked(false);
+  };
+
+  // Escape cancels draft rows
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && draft) setDraft(null);
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setDraftEntry(null); setDraftExit(null); }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [draft]);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
 
-  const updateEditRow = (id: number, patch: Partial<EditableRow>) =>
-    setEditRows(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  // ── Entry CRUD ─────────────────────────────────────────────────────────
 
-  // Accept for existing rows: recalculate computed fields locally + persist to server
-  // Does NOT re-fetch the full list → order stays stable
-  const acceptRow = async (id: number) => {
-    const row = editRows[id];
-    if (!row || !rowValid(row)) return;
-    const computed = computeRow(row);
-    // Update computed fields + mark accepted immediately (no flicker)
-    setEditRows(prev => ({
-      ...prev,
-      [id]: { ...prev[id], ...computed, accepted: true },
-    }));
-    setSavingRowId(id);
-    setError('');
+  const acceptEntry = async (id: number) => {
+    const row = entryRows[id];
+    if (!row || !entryValid(row)) return;
+    const computed = computeEntry(row);
+    setEntryRows(p => ({ ...p, [id]: { ...p[id], ...computed, accepted: true } }));
+    setSavingId(`tx-${id}`);
     try {
       const res = await fetch(`${BASE}/companies/${company.id}/transactions/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           seller_id: row.seller!.id,
           invoice_number: row.invoice || undefined,
@@ -159,123 +196,171 @@ export default function DayView({ company, date, onBack }: Props) {
           total_resale: parseFloat(row.total_resale),
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { detail?: string }).detail ?? `HTTP ${res.status}`);
-      }
-      // Only update report totals without touching row order
+      if (!res.ok) throw new Error(((await res.json()) as any).detail);
+      const updated: Transaction = await res.json();
+      setTxMap(p => ({ ...p, [id]: updated }));
       const rep = await getDailyReport(company.id, date);
       setReport(rep);
-      // Update the canonical transaction data in place
-      const updated: Transaction = await res.clone().json().catch(() => null);
-      if (updated) {
-        setTransactions(prev => prev.map(t => t.id === id ? updated : t));
-      }
-    } catch (e: any) {
-      setError((e as Error).message);
-    } finally {
-      setSavingRowId(null);
-    }
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingId(null); }
   };
 
-  // Accept for new draft: persist + append to bottom of list
-  const acceptDraft = async () => {
-    if (!draft || !rowValid(draft)) return;
-    const computed = computeRow(draft);
-    setDraft(d => d ? { ...d, ...computed, accepted: true } : d);
-    setSaving(true);
-    setError('');
-    try {
-      const payload: TransactionCreate = {
-        seller_id: draft.seller!.id,
-        invoice_number: draft.invoice || undefined,
-        register_entry_number: draft.register || undefined,
-        purchase_no_tax: parseFloat(draft.purchase_no_tax),
-        purchase_tax_amount: parseFloat(draft.purchase_tax_amount) || 0,
-        total_resale: parseFloat(draft.total_resale),
-      };
-      const newTx: Transaction = await createTransaction(company.id, date, payload);
-      setTransactions(prev => [...prev, newTx]);
-      setTxOrder(prev => [...prev, newTx.id]);
-      setEditRows(prev => ({ ...prev, [newTx.id]: txToEditable(newTx, sellers) }));
-      setDraft(null);
-      const rep = await getDailyReport(company.id, date);
-      setReport(rep);
-    } catch (e: any) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteRow = async (id: number) => {
-    setSavingRowId(id);
-    setError('');
+  const deleteEntry = async (id: number) => {
+    setSavingId(`tx-${id}`);
     try {
       const res = await fetch(`${BASE}/companies/${company.id}/transactions/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { detail?: string }).detail ?? `HTTP ${res.status}`);
-      }
-      setTransactions(prev => prev.filter(t => t.id !== id));
-      setTxOrder(prev => prev.filter(i => i !== id));
-      setEditRows(prev => { const n = { ...prev }; delete n[id]; return n; });
+      if (!res.ok) throw new Error(((await res.json()) as any).detail);
+      setTxOrder(p => p.filter(i => i !== id));
+      setTxMap(p => { const n = { ...p }; delete n[id]; return n; });
+      setEntryRows(p => { const n = { ...p }; delete n[id]; return n; });
       const rep = await getDailyReport(company.id, date);
       setReport(rep);
-    } catch (e: any) {
-      setError((e as Error).message);
-    } finally {
-      setSavingRowId(null);
-    }
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingId(null); }
   };
+
+  const submitDraftEntry = async () => {
+    if (!draftEntry || !entryValid(draftEntry)) return;
+    setSaving(true);
+    try {
+      const payload: TransactionCreate = {
+        seller_id: draftEntry.seller!.id,
+        invoice_number: draftEntry.invoice || undefined,
+        register_entry_number: draftEntry.register || undefined,
+        purchase_no_tax: parseFloat(draftEntry.purchase_no_tax),
+        purchase_tax_amount: parseFloat(draftEntry.purchase_tax_amount) || 0,
+        total_resale: parseFloat(draftEntry.total_resale),
+      };
+      const newTx = await createTransaction(company.id, date, payload);
+      setTxOrder(p => [...p, newTx.id]);
+      setTxMap(p => ({ ...p, [newTx.id]: newTx }));
+      setEntryRows(p => ({ ...p, [newTx.id]: txToEntry(newTx, counterparties) }));
+      setDraftEntry(null);
+      const rep = await getDailyReport(company.id, date);
+      setReport(rep);
+    } catch (e: any) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  // ── Exit CRUD ──────────────────────────────────────────────────────────
+
+  const acceptExit = async (id: number) => {
+    const row = exitRows[id];
+    if (!row || !exitValid(row)) return;
+    const computed = computeExit(row);
+    setExitRows(p => ({ ...p, [id]: { ...p[id], ...computed, accepted: true } }));
+    setSavingId(`ex-${id}`);
+    try {
+      const res = await fetch(`${BASE}/companies/${company.id}/exits/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          buyer_id: row.buyer!.id,
+          document_number: row.document || undefined,
+          total_sale: parseFloat(row.total_sale),
+          vat_amount: parseFloat(row.vat_amount) || 0,
+        }),
+      });
+      if (!res.ok) throw new Error(((await res.json()) as any).detail);
+      const updated: Exit = await res.json();
+      setExMap(p => ({ ...p, [id]: updated }));
+      const rep = await getDailyReport(company.id, date);
+      setReport(rep);
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingId(null); }
+  };
+
+  const deleteExit = async (id: number) => {
+    setSavingId(`ex-${id}`);
+    try {
+      const res = await fetch(`${BASE}/companies/${company.id}/exits/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(((await res.json()) as any).detail);
+      setExOrder(p => p.filter(i => i !== id));
+      setExMap(p => { const n = { ...p }; delete n[id]; return n; });
+      setExitRows(p => { const n = { ...p }; delete n[id]; return n; });
+      const rep = await getDailyReport(company.id, date);
+      setReport(rep);
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingId(null); }
+  };
+
+  const submitDraftExit = async () => {
+    if (!draftExit || !exitValid(draftExit)) return;
+    setSaving(true);
+    try {
+      const payload: ExitCreate = {
+        buyer_id: draftExit.buyer!.id,
+        document_number: draftExit.document || undefined,
+        total_sale: parseFloat(draftExit.total_sale),
+        vat_amount: parseFloat(draftExit.vat_amount) || 0,
+      };
+      const newEx = await createExit(company.id, date, payload);
+      setExOrder(p => [...p, newEx.id]);
+      setExMap(p => ({ ...p, [newEx.id]: newEx }));
+      setExitRows(p => ({ ...p, [newEx.id]: exToExitRow(newEx, counterparties) }));
+      setDraftExit(null);
+      const rep = await getDailyReport(company.id, date);
+      setReport(rep);
+    } catch (e: any) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  // ── Global save ────────────────────────────────────────────────────────
 
   const handleGlobalSave = async () => {
     setSaving(true);
-    setError('');
     try {
-      await setTotalSale(company.id, date, parseFloat(totalSale) || 0);
-      await load();
-      lock();
-      triggerToast();
-    } catch (e: any) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
+      await load(); lock();
+      setShowToast(true);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setShowToast(false), 2000);
+    } catch (e: any) { setError(e.message); }
+    finally { setSaving(false); }
   };
 
-  const triggerToast = () => {
-    setShowToast(true);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setShowToast(false), 2000);
-  };
+  // ── Section header totals ──────────────────────────────────────────────
 
-  const sum = (key: keyof Transaction) =>
-    transactions.reduce((s, t) => s + parseFloat(String(t[key])), 0);
+  const entryTotals = txOrder.reduce((acc, id) => {
+    const t = txMap[id];
+    if (!t) return acc;
+    return {
+      pnt: acc.pnt + parseFloat(String(t.purchase_no_tax)),
+      pvat: acc.pvat + parseFloat(String(t.purchase_tax_amount)),
+      tp: acc.tp + parseFloat(String(t.total_purchase)),
+      rnt: acc.rnt + parseFloat(String(t.resale_no_tax)),
+      rvat: acc.rvat + parseFloat(String(t.resale_vat)),
+      tr: acc.tr + parseFloat(String(t.total_resale)),
+      mu: acc.mu + parseFloat(String(t.markup)),
+    };
+  }, { pnt: 0, pvat: 0, tp: 0, rnt: 0, rvat: 0, tr: 0, mu: 0 });
 
-  // ── Shared input row renderer ──────────────────────────────────────────
-  const renderInputRow = (
-    row: EditableRow,
-    onChange: (p: Partial<EditableRow>) => void,
+  const exitTotals = exOrder.reduce((acc, id) => {
+    const e = exMap[id];
+    if (!e) return acc;
+    return {
+      nv: acc.nv + parseFloat(String(e.total_sale_no_vat)),
+      vat: acc.vat + parseFloat(String(e.vat_amount)),
+      ts: acc.ts + parseFloat(String(e.total_sale)),
+    };
+  }, { nv: 0, vat: 0, ts: 0 });
+
+  // ── Entry input row renderer ───────────────────────────────────────────
+
+  const renderEntryInputCells = (
+    row: EntryRow,
+    onChange: (p: Partial<EntryRow>) => void,
     onAccept: () => void,
     onDelete: () => void,
     busy: boolean,
     isDraft: boolean,
   ) => {
-    const valid = rowValid(row);
-    // Use accepted computed values if present, else live preview
-    const preview = row.accepted ? row : computeRow(row);
-    const { computed_total_purchase: tp, computed_resale_no_tax: rnt,
-            computed_markup: mu, computed_vat: vat } = preview;
-
+    const preview = row.accepted ? row : { ...row, ...computeEntry(row) };
+    const valid = entryValid(row);
     return (
       <>
         <td className={styles.td}>
-          <SellerSearch
-            sellers={sellers}
+          <SellerSearch sellers={counterparties}
             onSelect={s => onChange({ seller: s })}
-            onSellerCreated={s => { setSellers(prev => [...prev, s]); onChange({ seller: s }); }}
-          />
+            onSellerCreated={s => { setCounterparties(p => [...p, s]); onChange({ seller: s }); }} />
           {row.seller && (
             <div className={styles.selectedSeller}>
               <span>{row.seller.name}</span>
@@ -292,54 +377,145 @@ export default function DayView({ company, date, onBack }: Props) {
           <input className={styles.cellInput} value={row.register}
             onChange={e => onChange({ register: e.target.value })} placeholder="—" />
         </td>
+        {/* Purchase side */}
         <td className={styles.td}>
           <input className={`${styles.cellInput} ${styles.right} ${styles.mono}`}
-            type="number" min="0" step="0.01"
-            value={row.purchase_no_tax}
-            onChange={e => onChange({ purchase_no_tax: e.target.value })}
-            placeholder="0.00" />
+            type="number" min="0" step="0.01" value={row.purchase_no_tax}
+            onChange={e => onChange({ purchase_no_tax: e.target.value })} placeholder="0.00" />
         </td>
         <td className={styles.td}>
           <input className={`${styles.cellInput} ${styles.right} ${styles.mono}`}
-            type="number" min="0" step="0.01"
-            value={row.purchase_tax_amount}
-            onChange={e => onChange({ purchase_tax_amount: e.target.value })}
-            placeholder="0.00" />
-        </td>
-        <td className={`${styles.td} ${styles.center}`}>
-          <span className={styles.vatBadge}>{vat}</span>
+            type="number" min="0" step="0.01" value={row.purchase_tax_amount}
+            onChange={e => onChange({ purchase_tax_amount: e.target.value })} placeholder="0.00" />
         </td>
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed}`}>
-          {tp ? fmt(tp) : '—'}
+          {preview.c_total_purchase ? fmt(preview.c_total_purchase) : '—'}
         </td>
-        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed} ${styles.resaleCol}`}>
-          {rnt ? fmt(rnt) : '—'}
-        </td>
+        {/* Resale side */}
         <td className={`${styles.td} ${styles.resaleCol}`}>
           <input className={`${styles.cellInput} ${styles.right} ${styles.mono}`}
-            type="number" min="0" step="0.01"
-            value={row.total_resale}
-            onChange={e => onChange({ total_resale: e.target.value })}
-            placeholder="0.00"
+            type="number" min="0" step="0.01" value={row.total_resale}
+            onChange={e => onChange({ total_resale: e.target.value })} placeholder="0.00"
             onKeyDown={e => { if (e.key === 'Enter' && valid) onAccept(); }} />
         </td>
-        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed} ${styles.markupComputed}`}>
-          {mu ? fmt(mu) : '—'}
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed} ${styles.resaleCol}`}>
+          {preview.c_resale_vat ? fmt(preview.c_resale_vat) : '—'}
+        </td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed} ${styles.resaleCol}`}>
+          {preview.c_resale_no_tax ? fmt(preview.c_resale_no_tax) : '—'}
+        </td>
+        <td className={`${styles.td} ${styles.center}`}>
+          <span className={styles.vatBadge}>{preview.c_vat_pct}</span>
         </td>
         <td className={`${styles.td} ${styles.center}`}>
           <div className={styles.rowActions}>
-            <button className={styles.acceptBtn} title="Confirma calculele (Enter)"
-              onClick={onAccept} disabled={!valid || busy}>✓</button>
-            <button className={styles.deleteRowBtn}
-              title={isDraft ? 'Anulează (Esc)' : 'Șterge rândul'}
-              onClick={onDelete} disabled={busy}>✕</button>
+            <button className={styles.acceptBtn} onClick={onAccept} disabled={!valid || busy} title="Confirmă (Enter)">✓</button>
+            <button className={styles.deleteRowBtn} onClick={onDelete} disabled={busy} title={isDraft ? 'Anulează (Esc)' : 'Șterge'}>✕</button>
           </div>
         </td>
       </>
     );
   };
 
+  const renderEntryDisplayCells = (t: Transaction) => {
+    const pn = parseFloat(String(t.purchase_no_tax));
+    const tn = parseFloat(String(t.purchase_tax_amount));
+    const vat = pn > 0 ? `${Math.round((tn / pn) * 100)}%` : '—';
+    const cp = counterparties.find(c => c.id === t.seller_id);
+    return (
+      <>
+        <td className={`${styles.td} ${styles.bold}`}>{cp?.name ?? '—'}</td>
+        <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{cp?.tax_id ?? '—'}</td>
+        <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{t.invoice_number ?? '—'}</td>
+        <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{t.register_entry_number ?? '—'}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(t.purchase_no_tax)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(t.purchase_tax_amount)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(t.total_purchase)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.resaleCol}`}>{fmt(t.total_resale)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted} ${styles.resaleCol}`}>{fmt(t.resale_vat)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted} ${styles.resaleCol}`}>{fmt(t.resale_no_tax)}</td>
+        <td className={`${styles.td} ${styles.center}`}><span className={styles.vatBadge}>{vat}</span></td>
+        <td className={styles.td} />
+      </>
+    );
+  };
+
+  // ── Exit input row renderer ────────────────────────────────────────────
+
+  const renderExitInputCells = (
+    row: ExitRow,
+    onChange: (p: Partial<ExitRow>) => void,
+    onAccept: () => void,
+    onDelete: () => void,
+    busy: boolean,
+    isDraft: boolean,
+  ) => {
+    const preview = row.accepted ? row : { ...row, ...computeExit(row) };
+    const valid = exitValid(row);
+    return (
+      <>
+        <td className={styles.td}>
+          <SellerSearch sellers={counterparties}
+            onSelect={s => onChange({ buyer: s })}
+            onSellerCreated={s => { setCounterparties(p => [...p, s]); onChange({ buyer: s }); }} />
+          {row.buyer && (
+            <div className={styles.selectedSeller}>
+              <span>{row.buyer.name}</span>
+              <button className={styles.clearSeller} onClick={() => onChange({ buyer: null })}>×</button>
+            </div>
+          )}
+        </td>
+        <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{row.buyer?.tax_id ?? ''}</td>
+        <td className={styles.td}>
+          <input className={styles.cellInput} value={row.document}
+            onChange={e => onChange({ document: e.target.value })} placeholder="—" />
+        </td>
+        <td className={styles.td}>
+          <input className={`${styles.cellInput} ${styles.right} ${styles.mono}`}
+            type="number" min="0" step="0.01" value={row.total_sale}
+            onChange={e => onChange({ total_sale: e.target.value })} placeholder="0.00"
+            onKeyDown={e => { if (e.key === 'Enter' && valid) onAccept(); }} />
+        </td>
+        <td className={styles.td}>
+          <input className={`${styles.cellInput} ${styles.right} ${styles.mono}`}
+            type="number" min="0" step="0.01" value={row.vat_amount}
+            onChange={e => onChange({ vat_amount: e.target.value })} placeholder="0.00" />
+        </td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed}`}>
+          {preview.c_no_vat ? fmt(preview.c_no_vat) : '—'}
+        </td>
+        <td className={`${styles.td} ${styles.center}`}>
+          <div className={styles.rowActions}>
+            <button className={styles.acceptBtn} onClick={onAccept} disabled={!valid || busy} title="Confirmă (Enter)">✓</button>
+            <button className={styles.deleteRowBtn} onClick={onDelete} disabled={busy} title={isDraft ? 'Anulează (Esc)' : 'Șterge'}>✕</button>
+          </div>
+        </td>
+      </>
+    );
+  };
+
+  const renderExitDisplayCells = (e: Exit) => {
+    const cp = counterparties.find(c => c.id === e.buyer_id);
+    return (
+      <>
+        <td className={`${styles.td} ${styles.bold}`}>{cp?.name ?? '—'}</td>
+        <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{cp?.tax_id ?? '—'}</td>
+        <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{e.document_number ?? '—'}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(e.total_sale)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(e.vat_amount)}</td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(e.total_sale_no_vat)}</td>
+        <td className={styles.td} />
+      </>
+    );
+  };
+
   // ── JSX ────────────────────────────────────────────────────────────────
+
+  const p = report;
+
+  // Bottom totals data
+  const prevT = p?.prev_totals;
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -352,14 +528,14 @@ export default function DayView({ company, date, onBack }: Props) {
           </div>
         </div>
         <div className={styles.headerRight}>
-          {report && (
+          {p && (
             <div className={styles.stockBadge}>
               <span className={styles.stockLabel}>Stoc final</span>
-              <span className={styles.stockValue}>{fmt(report.stock_end_of_day)} lei</span>
+              <span className={styles.stockValue}>{fmt(p.stock_end_of_day)} lei</span>
             </div>
           )}
           {locked ? (
-            <button className={styles.editBtn} onClick={() => unlock(transactions, sellers)}>✎ Editează</button>
+            <button className={styles.editBtn} onClick={unlock}>✎ Editează</button>
           ) : (
             <button className={styles.saveBtn} onClick={handleGlobalSave} disabled={saving}>
               {saving ? '...' : '✓ Salvează tot'}
@@ -374,166 +550,261 @@ export default function DayView({ company, date, onBack }: Props) {
           Ziua este salvată. Apasă „Editează" pentru a face modificări.
         </div>
       )}
-
       {error && <div className={styles.errorBar}>{error}</div>}
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={`${styles.th} ${styles.thPurchase}`}>Furnizor</th>
-              <th className={`${styles.th} ${styles.thPurchase}`}>CUI</th>
-              <th className={`${styles.th} ${styles.thPurchase}`}>Nr. factură</th>
-              <th className={`${styles.th} ${styles.thPurchase}`}>Nr. intrare</th>
-              <th className={`${styles.th} ${styles.thPurchase} ${styles.right}`}>Fără TVA</th>
-              <th className={`${styles.th} ${styles.thPurchase} ${styles.right}`}>TVA</th>
-              <th className={`${styles.th} ${styles.thPurchase} ${styles.center}`}>Cota</th>
-              <th className={`${styles.th} ${styles.thPurchase} ${styles.right}`}>Total cump.</th>
-              <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Fără TVA</th>
-              <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Total vânz.</th>
-              <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Adaos</th>
-              <th className={`${styles.th} ${styles.thActions}`}></th>
-            </tr>
-            <tr className={styles.subHeaderRow}>
-              <th colSpan={4} />
-              <th colSpan={4} className={`${styles.subHeader} ${styles.subHeaderPurchase}`}>CUMPĂRARE</th>
-              <th colSpan={3} className={`${styles.subHeader} ${styles.subHeaderResale}`}>VÂNZARE</th>
-              <th />
-            </tr>
-          </thead>
+      <div className={styles.sectionsWrap}>
 
-          <tbody>
-            {txOrder.length === 0 && !draft && (
-              <tr className={styles.emptyRow}>
-                <td colSpan={12}>
-                  {locked ? 'Nicio tranzacție înregistrată.' : 'Nicio tranzacție. Adaugă un rând pentru a începe.'}
-                </td>
-              </tr>
-            )}
+        {/* ── ENTRIES SECTION ─────────────────────────────────────────── */}
+        <div className={styles.section}>
+          <button className={styles.sectionToggle} onClick={() => setEntriesOpen(o => !o)}>
+            <span className={styles.sectionToggleLeft}>
+              <span className={styles.sectionCaret}>{entriesOpen ? '▾' : '▸'}</span>
+              <span className={styles.sectionTitle}>Intrări</span>
+            </span>
+            <span className={styles.sectionSummary}>
+              <span className={styles.sumChip}>Cump. fără TVA <strong>{fmt(entryTotals.pnt)}</strong></span>
+              <span className={styles.sumChip}>TVA <strong>{fmt(entryTotals.pvat)}</strong></span>
+              <span className={styles.sumChip}>Total cump. <strong>{fmt(entryTotals.tp)}</strong></span>
+              <span className={styles.sumDivider} />
+              <span className={styles.sumChip}>Vânz. la preț achiz. fără TVA <strong>{fmt(entryTotals.rnt)}</strong></span>
+              <span className={styles.sumChip}>TVA vânz. <strong>{fmt(entryTotals.rvat)}</strong></span>
+              <span className={styles.sumChip}>Total vânz. la preț achiz. <strong>{fmt(entryTotals.tr)}</strong></span>
+            </span>
+          </button>
 
-            {txOrder.map(id => {
-              const t = transactions.find(tx => tx.id === id);
-              if (!t) return null;
-              const editRow = editRows[id];
-              const busy = savingRowId === id;
-
-              if (!locked && editRow) {
-                return (
-                  <tr key={id} className={`${styles.row} ${styles.draftRow}`}>
-                    {renderInputRow(
-                      editRow,
-                      patch => updateEditRow(id, patch),
-                      () => acceptRow(id),
-                      () => deleteRow(id),
-                      busy, false,
-                    )}
+          {entriesOpen && (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={`${styles.th} ${styles.thPurchase}`}>Furnizor</th>
+                    <th className={`${styles.th} ${styles.thPurchase}`}>CUI</th>
+                    <th className={`${styles.th} ${styles.thPurchase}`}>Nr. factură</th>
+                    <th className={`${styles.th} ${styles.thPurchase}`}>Nr. intrare</th>
+                    <th className={`${styles.th} ${styles.thPurchase} ${styles.right}`}>Fără TVA</th>
+                    <th className={`${styles.th} ${styles.thPurchase} ${styles.right}`}>TVA</th>
+                    <th className={`${styles.th} ${styles.thPurchase} ${styles.right}`}>Total cump.</th>
+                    <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Total cu TVA</th>
+                    <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>TVA</th>
+                    <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Fără TVA</th>
+                    <th className={`${styles.th} ${styles.thResale} ${styles.center}`}>Cotă</th>
+                    <th className={`${styles.th} ${styles.thActions}`}></th>
                   </tr>
-                );
-              }
+                  <tr className={styles.subHeaderRow}>
+                    <th colSpan={4} />
+                    <th colSpan={3} className={`${styles.subHeader} ${styles.subHeaderPurchase}`}>CUMPĂRARE</th>
+                    <th colSpan={4} className={`${styles.subHeader} ${styles.subHeaderResale}`}>LA PREȚUL DE VANZARE</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {txOrder.length === 0 && !draftEntry && (
+                    <tr className={styles.emptyRow}><td colSpan={12}>
+                      {locked ? 'Nicio intrare.' : 'Nicio intrare. Adaugă un rând.'}
+                    </td></tr>
+                  )}
+                  {txOrder.map(id => {
+                    const t = txMap[id];
+                    const row = entryRows[id];
+                    const busy = savingId === `tx-${id}`;
+                    if (!t) return null;
+                    if (!locked && row) {
+                      return (
+                        <tr key={id} className={`${styles.row} ${styles.editRow}`}>
+                          {renderEntryInputCells(row, p => setEntryRows(prev => ({ ...prev, [id]: { ...prev[id], ...p } })),
+                            () => acceptEntry(id), () => deleteEntry(id), busy, false)}
+                        </tr>
+                      );
+                    }
+                    return <tr key={id} className={styles.row}>{renderEntryDisplayCells(t)}</tr>;
+                  })}
+                  {!locked && draftEntry && (
+                    <tr className={`${styles.row} ${styles.draftNew}`}>
+                      {renderEntryInputCells(draftEntry, p => setDraftEntry(d => d ? { ...d, ...p } : d),
+                        submitDraftEntry, () => setDraftEntry(null), saving, true)}
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className={styles.totalsRow}>
+                    <td colSpan={4} className={styles.td}>
+                      {!locked && (
+                        <button className={`${styles.addRowBtn} ${draftEntry ? styles.addRowBtnDisabled : ''}`}
+                          onClick={() => { if (!draftEntry) { setDraftEntry(emptyEntry()); setError(''); } }}
+                          disabled={!!draftEntry}>
+                          + Adaugă intrare
+                        </button>
+                      )}
+                    </td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal}`}>{fmt(entryTotals.pnt)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted}`}>{fmt(entryTotals.pvat)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.bold}`}>{fmt(entryTotals.tp)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.bold} ${styles.resaleCol}`}>{fmt(entryTotals.tr)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted} ${styles.resaleCol}`}>{fmt(entryTotals.rvat)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted} ${styles.resaleCol}`}>{fmt(entryTotals.rnt)}</td>
+                    <td className={styles.td} /><td className={styles.td} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
 
-              const s = sellers.find(sel => sel.id === t.seller_id);
-              const pn = String(t.purchase_no_tax);
-              const tn = String(t.purchase_tax_amount);
-              const vat = parseFloat(pn) > 0
-                ? `${Math.round((parseFloat(tn) / parseFloat(pn)) * 100)}%`
-                : '—';
-              return (
-                <tr key={id} className={styles.row}>
-                  <td className={`${styles.td} ${styles.sellerName}`}>{s?.name ?? '—'}</td>
-                  <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{s?.tax_id ?? '—'}</td>
-                  <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{t.invoice_number ?? '—'}</td>
-                  <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{t.register_entry_number ?? '—'}</td>
-                  <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(t.purchase_no_tax)}</td>
-                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(t.purchase_tax_amount)}</td>
-                  <td className={`${styles.td} ${styles.center}`}><span className={styles.vatBadge}>{vat}</span></td>
-                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(t.total_purchase)}</td>
-                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted} ${styles.resaleCol}`}>{fmt(t.resale_no_tax)}</td>
-                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold} ${styles.resaleCol}`}>{fmt(t.total_resale)}</td>
-                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.markup}`}>{fmt(t.markup)}</td>
-                  <td className={styles.td} />
-                </tr>
-              );
-            })}
+        {/* ── EXITS SECTION ───────────────────────────────────────────── */}
+        <div className={styles.section}>
+          <button className={styles.sectionToggle} onClick={() => setExitsOpen(o => !o)}>
+            <span className={styles.sectionToggleLeft}>
+              <span className={styles.sectionCaret}>{exitsOpen ? '▾' : '▸'}</span>
+              <span className={styles.sectionTitle}>Ieșiri</span>
+            </span>
+            <span className={styles.sectionSummary}>
+              <span className={styles.sumChip}>Fără TVA <strong>{fmt(exitTotals.nv)}</strong></span>
+              <span className={styles.sumChip}>TVA <strong>{fmt(exitTotals.vat)}</strong></span>
+              <span className={styles.sumChip}>Total vânzări <strong>{fmt(exitTotals.ts)}</strong></span>
+            </span>
+          </button>
 
-            {!locked && draft !== null && (
-              <tr className={`${styles.row} ${styles.draftRow} ${styles.draftNew}`}>
-                {renderInputRow(
-                  draft,
-                  patch => setDraft(d => d ? { ...d, ...patch } : d),
-                  acceptDraft,
-                  () => setDraft(null),
-                  saving, true,
-                )}
-              </tr>
-            )}
-          </tbody>
-
-          <tfoot>
-            <tr className={styles.totalsRow}>
-              <td colSpan={4} className={styles.td}>
-                {!locked && (
-                  <button
-                    className={`${styles.addRowBtn} ${draft !== null ? styles.addRowBtnDisabled : ''}`}
-                    onClick={() => { if (!draft) { setDraft(emptyDraft()); setError(''); } }}
-                    disabled={draft !== null}
-                  >
-                    + Adaugă rând
-                  </button>
-                )}
-              </td>
-              <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal}`}>{fmt(sum('purchase_no_tax'))}</td>
-              <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted}`}>{fmt(sum('purchase_tax_amount'))}</td>
-              <td className={styles.td} />
-              <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.bold}`}>{fmt(sum('total_purchase'))}</td>
-              <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted} ${styles.resaleCol}`}>{fmt(sum('resale_no_tax'))}</td>
-              <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.bold} ${styles.resaleCol}`}>{fmt(sum('total_resale'))}</td>
-              <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.markupTotal}`}>{fmt(sum('markup'))}</td>
-              <td className={styles.td} />
-            </tr>
-            <tr className={styles.saleRow}>
-              <td colSpan={4} className={styles.td} />
-              <td colSpan={4} className={styles.td} />
-              <td colSpan={4} className={styles.td}>
-                <div className={styles.saleInner}>
-                  <label className={styles.saleLabel}>Vânzări totale (casă)</label>
-                  <input
-                    className={styles.saleInput}
-                    type="number" min="0" step="0.01"
-                    value={totalSale}
-                    onChange={e => setTotalSaleVal(e.target.value)}
-                    disabled={locked}
-                    placeholder="0.00"
-                  />
-                </div>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+          {exitsOpen && (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.th}>Beneficiar</th>
+                    <th className={styles.th}>CUI</th>
+                    <th className={styles.th}>Nr. document</th>
+                    <th className={`${styles.th} ${styles.right}`}>Total cu TVA</th>
+                    <th className={`${styles.th} ${styles.right}`}>TVA</th>
+                    <th className={`${styles.th} ${styles.right}`}>Fără TVA</th>
+                    <th className={`${styles.th} ${styles.thActions}`}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exOrder.length === 0 && !draftExit && (
+                    <tr className={styles.emptyRow}><td colSpan={7}>
+                      {locked ? 'Nicio ieșire.' : 'Nicio ieșire. Adaugă un rând.'}
+                    </td></tr>
+                  )}
+                  {exOrder.map(id => {
+                    const e = exMap[id];
+                    const row = exitRows[id];
+                    const busy = savingId === `ex-${id}`;
+                    if (!e) return null;
+                    if (!locked && row) {
+                      return (
+                        <tr key={id} className={`${styles.row} ${styles.exitEditRow}`}>
+                          {renderExitInputCells(row, p => setExitRows(prev => ({ ...prev, [id]: { ...prev[id], ...p } })),
+                            () => acceptExit(id), () => deleteExit(id), busy, false)}
+                        </tr>
+                      );
+                    }
+                    return <tr key={id} className={styles.row}>{renderExitDisplayCells(e)}</tr>;
+                  })}
+                  {!locked && draftExit && (
+                    <tr className={`${styles.row} ${styles.draftNew}`}>
+                      {renderExitInputCells(draftExit, p => setDraftExit(d => d ? { ...d, ...p } : d),
+                        submitDraftExit, () => setDraftExit(null), saving, true)}
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className={styles.totalsRow}>
+                    <td colSpan={3} className={styles.td}>
+                      {!locked && (
+                        <button className={`${styles.addRowBtn} ${draftExit ? styles.addRowBtnDisabled : ''}`}
+                          onClick={() => { if (!draftExit) { setDraftExit(emptyExit()); setError(''); } }}
+                          disabled={!!draftExit}>
+                          + Adaugă ieșire
+                        </button>
+                      )}
+                    </td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.bold}`}>{fmt(exitTotals.ts)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted}`}>{fmt(exitTotals.vat)}</td>
+                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal}`}>{fmt(exitTotals.nv)}</td>
+                    <td className={styles.td} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
-      {report && (
-        <div className={styles.summaryBar}>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Stoc anterior</span>
-            <span className={styles.summaryValue}>{fmt(report.previous_stock)} lei</span>
-          </div>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Intrări (vânz.)</span>
-            <span className={styles.summaryValue}>{fmt(report.total_resale)} lei</span>
-          </div>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Ieșiri (vânzări)</span>
-            <span className={styles.summaryValue}>{fmt(report.total_sale_input)} lei</span>
-          </div>
-          <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Variație netă</span>
-            <span className={`${styles.summaryValue} ${parseFloat(String(report.net_inventory_change)) >= 0 ? styles.pos : styles.neg}`}>
-              {fmt(report.net_inventory_change)} lei
-            </span>
-          </div>
-          <div className={`${styles.summaryItem} ${styles.summaryStock}`}>
-            <span className={styles.summaryLabel}>Stoc final</span>
-            <span className={styles.summaryValue}>{fmt(report.stock_end_of_day)} lei</span>
+      {/* ── BOTTOM TOTALS ────────────────────────────────────────────────── */}
+      {p && (
+        <div className={styles.bottomTotals}>
+          {/* Previous day */}
+          {prevT && (
+            <div className={styles.totalsBlock}>
+              <div className={styles.totalsBlockLabel}>Ziua anterioară</div>
+              <div className={styles.totalsGrid}>
+                <div className={styles.totalsCell}>
+                  <span className={styles.totalsCellLabel}>Intrări fără TVA</span>
+                  <span className={styles.totalsCellVal}>{fmt(prevT.purchase_no_tax)}</span>
+                </div>
+                <div className={styles.totalsCell}>
+                  <span className={styles.totalsCellLabel}>TVA intrări</span>
+                  <span className={styles.totalsCellVal}>{fmt(prevT.purchase_vat)}</span>
+                </div>
+                <div className={styles.totalsCell}>
+                  <span className={styles.totalsCellLabel}>Total intrări</span>
+                  <span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(prevT.total_purchase)}</span>
+                </div>
+                <div className={styles.totalsDivider} />
+                <div className={styles.totalsCell}>
+                  <span className={styles.totalsCellLabel}>Ieșiri fără TVA</span>
+                  <span className={styles.totalsCellVal}>{fmt(prevT.exit_no_vat)}</span>
+                </div>
+                <div className={styles.totalsCell}>
+                  <span className={styles.totalsCellLabel}>TVA ieșiri</span>
+                  <span className={styles.totalsCellVal}>{fmt(prevT.exit_vat)}</span>
+                </div>
+                <div className={styles.totalsCell}>
+                  <span className={styles.totalsCellLabel}>Total ieșiri</span>
+                  <span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(prevT.total_exit)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Today */}
+          <div className={`${styles.totalsBlock} ${styles.totalsBlockToday}`}>
+            <div className={styles.totalsBlockLabel}>Ziua curentă</div>
+            <div className={styles.totalsGrid}>
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>Intrări fără TVA</span>
+                <span className={styles.totalsCellVal}>{fmt(p.total_purchase_no_tax)}</span>
+              </div>
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>TVA intrări</span>
+                <span className={styles.totalsCellVal}>{fmt(p.total_purchase_vat)}</span>
+              </div>
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>Total intrări</span>
+                <span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(p.total_purchase)}</span>
+              </div>
+              <div className={styles.totalsDivider} />
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>Ieșiri fără TVA</span>
+                <span className={styles.totalsCellVal}>{fmt(p.total_exit_no_vat)}</span>
+              </div>
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>TVA ieșiri</span>
+                <span className={styles.totalsCellVal}>{fmt(p.total_exit_vat)}</span>
+              </div>
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>Total ieșiri</span>
+                <span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(p.total_exit)}</span>
+              </div>
+              <div className={styles.totalsDivider} />
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>Stoc anterior</span>
+                <span className={styles.totalsCellVal}>{fmt(p.previous_stock)}</span>
+              </div>
+              <div className={styles.totalsCell}>
+                <span className={styles.totalsCellLabel}>Stoc final</span>
+                <span className={`${styles.totalsCellVal} ${styles.accentVal}`}>{fmt(p.stock_end_of_day)}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

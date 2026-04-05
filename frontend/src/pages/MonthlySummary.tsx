@@ -1,72 +1,80 @@
 // src/pages/MonthlySummary.tsx
 import { useEffect, useState } from 'react';
-import type { Company, DaySummary } from '../types';
+import type { Company, MonthlySummaryResponse, SummaryTotalsRow } from '../types';
 import { getMonthlySummary } from '../api';
 import { exportToPDF, exportToExcel, type ExportColumn, type ExportRow } from '../utils/exportUtils';
 import styles from './Summary.module.css';
 
 const MONTHS = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie',
                 'Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
-
 const DAYS_RO = ['Duminică','Luni','Marți','Miercuri','Joi','Vineri','Sâmbătă'];
 
 const fmt = (v: string | number) =>
   Number(v).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function formatDayId(iso: string): string {
+function dayLabel(iso: string) {
   const d = new Date(iso + 'T00:00:00');
   const [y, m, day] = iso.split('-');
   return `${day}/${m}/${y}, ${DAYS_RO[d.getDay()]}`;
 }
 
-interface Props {
-  company: Company;
-  year: number;
-  month: number; // 1-12
-  onBack: () => void;
-}
+interface Props { company: Company; year: number; month: number; onBack: () => void; }
 
-const COLUMNS: ExportColumn[] = [
+const COLS: ExportColumn[] = [
   { header: 'Data', key: 'label', align: 'left' },
-  { header: 'Total cumpărări', key: 'total_purchase', align: 'right' },
-  { header: 'Total vânzări (intrări)', key: 'total_resale', align: 'right' },
-  { header: 'Adaos', key: 'total_markup', align: 'right' },
-  { header: 'Vânzări casă', key: 'total_sale', align: 'right' },
-  { header: 'Variație netă', key: 'net_change', align: 'right' },
-  { header: 'Stoc final zi', key: 'stock_end_of_day', align: 'right' },
+  { header: 'Intr. fără TVA', key: 'tp_nt', align: 'right' },
+  { header: 'TVA intr.', key: 'tp_vat', align: 'right' },
+  { header: 'Total intr.', key: 'tp', align: 'right' },
+  { header: 'Ies. fără TVA', key: 'ex_nt', align: 'right' },
+  { header: 'TVA ies.', key: 'ex_vat', align: 'right' },
+  { header: 'Total ies.', key: 'ex', align: 'right' },
+  { header: 'Stoc final zi', key: 'stock', align: 'right' },
 ];
 
+function TotalsRow({ label, row, prev }: { label: string; row: SummaryTotalsRow; prev?: boolean }) {
+  return (
+    <tr className={prev ? styles.prevTotalsRow : styles.periodTotalsRow}>
+      <td className={`${styles.td} ${styles.totalsLabel}`}>{label}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(row.purchase_no_tax)}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(row.purchase_vat)}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(row.total_purchase)}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(row.exit_no_vat)}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(row.exit_vat)}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(row.total_exit)}</td>
+      <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold}`}>{fmt(row.stock_end)}</td>
+    </tr>
+  );
+}
+
 export default function MonthlySummary({ company, year, month, onBack }: Props) {
-  const [rows, setRows] = useState<DaySummary[]>([]);
+  const [data, setData] = useState<MonthlySummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
     getMonthlySummary(company.id, year, month)
-      .then(setRows)
-      .catch(e => setError((e as Error).message))
-      .finally(() => setLoading(false));
+      .then(setData).catch(e => setError((e as Error).message)).finally(() => setLoading(false));
   }, [company.id, year, month]);
 
   const title = `${MONTHS[month - 1]} ${year}`;
-  const subtitle = company.name;
   const filename = `${company.name}_${year}_${String(month).padStart(2,'0')}`;
 
-  const exportRows: ExportRow[] = rows.map(r => ({
-    label: formatDayId(r.date),
-    total_purchase: fmt(r.total_purchase),
-    total_resale: fmt(r.total_resale),
-    total_markup: fmt(r.total_markup),
-    total_sale: fmt(r.total_sale),
-    net_change: fmt(r.net_change),
-    stock_end_of_day: fmt(r.stock_end_of_day),
+  const exportRows: ExportRow[] = (data?.rows ?? []).map(r => ({
+    label: dayLabel(r.date),
+    tp_nt: fmt(r.total_purchase_no_tax), tp_vat: fmt(r.total_purchase_vat), tp: fmt(r.total_purchase),
+    ex_nt: fmt(r.total_exit_no_vat), ex_vat: fmt(r.total_exit_vat), ex: fmt(r.total_exit),
+    stock: fmt(r.stock_end_of_day),
   }));
 
-  const handleExport = (format: 'pdf' | 'excel') => {
-    if (format === 'pdf') exportToPDF(title, subtitle, COLUMNS, exportRows, filename);
-    else exportToExcel(title, COLUMNS, exportRows, filename);
+  const handleExport = (f: 'pdf' | 'excel') => {
+    if (f === 'pdf') exportToPDF(title, company.name, COLS, exportRows, filename);
+    else exportToExcel(title, COLS, exportRows, filename);
   };
+
+  const prevLabel = month === 1
+    ? `${MONTHS[11]} ${year - 1}`
+    : `${MONTHS[month - 2]} ${year}`;
 
   return (
     <div className={styles.page}>
@@ -75,7 +83,7 @@ export default function MonthlySummary({ company, year, month, onBack }: Props) 
           <button className={styles.backBtn} onClick={onBack}>← Înapoi</button>
           <div className={styles.titleBlock}>
             <span className={styles.mainTitle}>{title}</span>
-            <span className={styles.subTitle}>{subtitle}</span>
+            <span className={styles.subTitle}>{company.name}</span>
           </div>
         </div>
         <div className={styles.headerRight}>
@@ -87,38 +95,41 @@ export default function MonthlySummary({ company, year, month, onBack }: Props) 
       <div className={styles.tableWrap}>
         {loading && <div className={styles.empty}>Se încarcă...</div>}
         {error && <div className={styles.errorBar}>{error}</div>}
-        {!loading && !error && rows.length === 0 && (
+        {!loading && !error && (!data || data.rows.length === 0) && (
           <div className={styles.empty}>Nu există date pentru această perioadă.</div>
         )}
-        {!loading && rows.length > 0 && (
+        {!loading && data && data.rows.length > 0 && (
           <table className={styles.table}>
             <thead>
               <tr>
                 <th className={`${styles.th} ${styles.left}`}>Data</th>
-                <th className={`${styles.th} ${styles.right}`}>Total cumpărări</th>
-                <th className={`${styles.th} ${styles.right}`}>Total vânzări (intrări)</th>
-                <th className={`${styles.th} ${styles.right}`}>Adaos</th>
-                <th className={`${styles.th} ${styles.right}`}>Vânzări casă</th>
-                <th className={`${styles.th} ${styles.right}`}>Variație netă</th>
+                <th className={`${styles.th} ${styles.right}`}>Intr. fără TVA</th>
+                <th className={`${styles.th} ${styles.right}`}>TVA intr.</th>
+                <th className={`${styles.th} ${styles.right}`}>Total intr.</th>
+                <th className={`${styles.th} ${styles.right}`}>Ies. fără TVA</th>
+                <th className={`${styles.th} ${styles.right}`}>TVA ies.</th>
+                <th className={`${styles.th} ${styles.right}`}>Total ies.</th>
                 <th className={`${styles.th} ${styles.right} ${styles.stockCol}`}>Stoc final zi</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
-                const nc = parseFloat(String(r.net_change));
-                return (
-                  <tr key={r.date} className={styles.row}>
-                    <td className={`${styles.td} ${styles.left} ${styles.label}`}>{formatDayId(r.date)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(r.total_purchase)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(r.total_resale)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.markup}`}>{fmt(r.total_markup)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(r.total_sale)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${nc >= 0 ? styles.pos : styles.neg}`}>{fmt(r.net_change)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold}`}>{fmt(r.stock_end_of_day)}</td>
-                  </tr>
-                );
-              })}
+              {data.rows.map(r => (
+                <tr key={r.date} className={styles.row}>
+                  <td className={`${styles.td} ${styles.left} ${styles.label}`}>{dayLabel(r.date)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(r.total_purchase_no_tax)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(r.total_purchase_vat)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(r.total_purchase)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(r.total_exit_no_vat)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(r.total_exit_vat)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.bold}`}>{fmt(r.total_exit)}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold}`}>{fmt(r.stock_end_of_day)}</td>
+                </tr>
+              ))}
             </tbody>
+            <tfoot>
+              <TotalsRow label={prevLabel} row={data.prev_totals} prev />
+              <TotalsRow label={`${MONTHS[month - 1]} ${year} (total)`} row={data.period_totals} />
+            </tfoot>
           </table>
         )}
       </div>
