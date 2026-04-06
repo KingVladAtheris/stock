@@ -11,61 +11,54 @@ from . import models, schemas, crud
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Accounting Assistant API")
-
-app.add_middleware(
-    CORSMiddleware,
+app.add_middleware(CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
-# ── Companies ─────────────────────────────────────────────────────────────
+# ── Companies ──────────────────────────────────────────────────────────────
 
 @app.post("/companies", response_model=schemas.Company)
 def create_company(data: schemas.CompanyCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.Company).filter(models.Company.tax_id == data.tax_id).first()
-    if existing:
-        raise HTTPException(409, "A company with this tax ID already exists.")
-    company = models.Company(name=data.name, tax_id=data.tax_id,
-                              chamber_id=data.chamber_id, opening_stock=data.opening_stock)
-    db.add(company); db.commit(); db.refresh(company)
-    return company
+    if db.query(models.Company).filter(models.Company.tax_id == data.tax_id).first():
+        raise HTTPException(409, "Tax ID already exists.")
+    c = models.Company(name=data.name, tax_id=data.tax_id, chamber_id=data.chamber_id,
+                       opening_stock_no_vat=data.opening_stock_no_vat,
+                       opening_stock_vat=data.opening_stock_vat,
+                       opening_stock_total=data.opening_stock_total)
+    db.add(c); db.commit(); db.refresh(c); return c
 
 @app.get("/companies", response_model=List[schemas.Company])
 def get_companies(db: Session = Depends(get_db)):
     return db.query(models.Company).all()
 
-@app.get("/companies/{company_id}", response_model=schemas.Company)
-def get_company(company_id: int, db: Session = Depends(get_db)):
-    c = db.query(models.Company).filter(models.Company.id == company_id).first()
-    if not c: raise HTTPException(404, "Company not found.")
+@app.get("/companies/{cid}", response_model=schemas.Company)
+def get_company(cid: int, db: Session = Depends(get_db)):
+    c = db.query(models.Company).filter(models.Company.id == cid).first()
+    if not c: raise HTTPException(404, "Not found.")
     return c
 
-@app.put("/companies/{company_id}", response_model=schemas.Company)
-def update_company(company_id: int, data: schemas.CompanyCreate, db: Session = Depends(get_db)):
-    c = db.query(models.Company).filter(models.Company.id == company_id).first()
-    if not c: raise HTTPException(404, "Company not found.")
+@app.put("/companies/{cid}", response_model=schemas.Company)
+def update_company(cid: int, data: schemas.CompanyCreate, db: Session = Depends(get_db)):
+    c = db.query(models.Company).filter(models.Company.id == cid).first()
+    if not c: raise HTTPException(404, "Not found.")
     if data.tax_id != c.tax_id:
-        conflict = db.query(models.Company).filter(models.Company.tax_id == data.tax_id).first()
-        if conflict: raise HTTPException(409, "Tax ID already exists.")
-    c.name = data.name; c.tax_id = data.tax_id
-    c.chamber_id = data.chamber_id; c.opening_stock = data.opening_stock
-    db.commit(); db.refresh(c)
-    return c
+        if db.query(models.Company).filter(models.Company.tax_id == data.tax_id).first():
+            raise HTTPException(409, "Tax ID already exists.")
+    c.name = data.name; c.tax_id = data.tax_id; c.chamber_id = data.chamber_id
+    c.opening_stock_no_vat = data.opening_stock_no_vat
+    c.opening_stock_vat    = data.opening_stock_vat
+    c.opening_stock_total  = data.opening_stock_total
+    db.commit(); db.refresh(c); return c
 
-@app.delete("/companies/{company_id}", status_code=204)
-def delete_company(company_id: int, db: Session = Depends(get_db)):
-    c = db.query(models.Company).filter(models.Company.id == company_id).first()
-    if not c: raise HTTPException(404, "Company not found.")
-    db.query(models.Transaction).filter(models.Transaction.company_id == company_id).delete()
-    db.query(models.Exit).filter(models.Exit.company_id == company_id).delete()
-    db.query(models.DailySalesInput).filter(models.DailySalesInput.company_id == company_id).delete()
+@app.delete("/companies/{cid}", status_code=204)
+def delete_company(cid: int, db: Session = Depends(get_db)):
+    c = db.query(models.Company).filter(models.Company.id == cid).first()
+    if not c: raise HTTPException(404, "Not found.")
     db.delete(c); db.commit()
 
 
-# ── Counterparties (sellers + buyers) ────────────────────────────────────
+# ── Counterparties ─────────────────────────────────────────────────────────
 
 @app.post("/counterparties", response_model=schemas.Counterparty)
 def create_counterparty(data: schemas.CounterpartyCreate, db: Session = Depends(get_db)):
@@ -75,7 +68,7 @@ def create_counterparty(data: schemas.CounterpartyCreate, db: Session = Depends(
 def get_counterparties(db: Session = Depends(get_db)):
     return db.query(models.Counterparty).all()
 
-# Legacy seller endpoints (backward compat)
+# Legacy compat
 @app.post("/sellers", response_model=schemas.Counterparty)
 def create_seller(data: schemas.CounterpartyCreate, db: Session = Depends(get_db)):
     return crud.get_or_create_counterparty(db, data.name, data.tax_id)
@@ -85,100 +78,160 @@ def get_sellers(db: Session = Depends(get_db)):
     return db.query(models.Counterparty).all()
 
 
-# ── Transactions (entries) ────────────────────────────────────────────────
+# ── Products ───────────────────────────────────────────────────────────────
 
-@app.post("/companies/{company_id}/days/{day}/transactions", response_model=schemas.Transaction)
-def add_transaction(company_id: int, day: date, data: schemas.TransactionCreate, db: Session = Depends(get_db)):
-    return crud.create_transaction(db, company_id, day, data)
+@app.post("/companies/{cid}/products", response_model=schemas.Product)
+def create_product(cid: int, data: schemas.ProductCreate, db: Session = Depends(get_db)):
+    return crud.get_or_create_product(db, cid, data.name)
 
-@app.get("/companies/{company_id}/days/{day}/transactions", response_model=List[schemas.Transaction])
-def get_transactions(company_id: int, day: date, db: Session = Depends(get_db)):
-    return db.query(models.Transaction).filter(
-        models.Transaction.company_id == company_id,
-        models.Transaction.date == day,
+@app.get("/companies/{cid}/products", response_model=List[schemas.Product])
+def get_products(cid: int, db: Session = Depends(get_db)):
+    return crud.get_products(db, cid)
+
+
+# ── Inventory ──────────────────────────────────────────────────────────────
+
+@app.get("/companies/{cid}/inventory", response_model=List[schemas.InventoryItem])
+def get_inventory(cid: int, db: Session = Depends(get_db)):
+    return crud.get_inventory(db, cid)
+
+
+# ── Transactions (entry headers) ───────────────────────────────────────────
+
+@app.post("/companies/{cid}/days/{day}/transactions", response_model=schemas.Transaction)
+def add_transaction(cid: int, day: date, data: schemas.TransactionCreate, db: Session = Depends(get_db)):
+    return crud.create_transaction(db, cid, day, data)
+
+@app.get("/companies/{cid}/days/{day}/transactions", response_model=List[schemas.Transaction])
+def get_transactions(cid: int, day: date, db: Session = Depends(get_db)):
+    txs = db.query(models.Transaction).filter(
+        models.Transaction.company_id == cid, models.Transaction.date == day,
     ).order_by(models.Transaction.id).all()
+    return [crud._enrich_transaction(t) for t in txs]
 
-@app.put("/companies/{company_id}/transactions/{tx_id}", response_model=schemas.Transaction)
-def update_transaction(company_id: int, tx_id: int, data: schemas.TransactionCreate, db: Session = Depends(get_db)):
-    tx = db.query(models.Transaction).filter(
-        models.Transaction.id == tx_id, models.Transaction.company_id == company_id).first()
-    if not tx: raise HTTPException(404, "Transaction not found.")
-    return crud.update_transaction(db, tx, data)
+@app.put("/companies/{cid}/transactions/{tid}", response_model=schemas.Transaction)
+def update_transaction(cid: int, tid: int, data: schemas.TransactionCreate, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == tid,
+                                              models.Transaction.company_id == cid).first()
+    if not tx: raise HTTPException(404, "Not found.")
+    return crud._enrich_transaction(crud.update_transaction(db, tx, data))
 
-@app.delete("/companies/{company_id}/transactions/{tx_id}", status_code=204)
-def delete_transaction(company_id: int, tx_id: int, db: Session = Depends(get_db)):
-    tx = db.query(models.Transaction).filter(
-        models.Transaction.id == tx_id, models.Transaction.company_id == company_id).first()
-    if not tx: raise HTTPException(404, "Transaction not found.")
+@app.delete("/companies/{cid}/transactions/{tid}", status_code=204)
+def delete_transaction(cid: int, tid: int, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == tid,
+                                              models.Transaction.company_id == cid).first()
+    if not tx: raise HTTPException(404, "Not found.")
     db.delete(tx); db.commit()
 
 
-# ── Exits ─────────────────────────────────────────────────────────────────
+# ── Transaction items ──────────────────────────────────────────────────────
 
-@app.post("/companies/{company_id}/days/{day}/exits", response_model=schemas.ExitSchema)
-def add_exit(company_id: int, day: date, data: schemas.ExitCreate, db: Session = Depends(get_db)):
-    return crud.create_exit(db, company_id, day, data)
+@app.post("/companies/{cid}/transactions/{tid}/items", response_model=schemas.TransactionItemSchema)
+def add_transaction_item(cid: int, tid: int, data: schemas.TransactionItemCreate, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == tid,
+                                              models.Transaction.company_id == cid).first()
+    if not tx: raise HTTPException(404, "Transaction not found.")
+    return crud.create_transaction_item(db, cid, tid, data)
 
-@app.get("/companies/{company_id}/days/{day}/exits", response_model=List[schemas.ExitSchema])
-def get_exits(company_id: int, day: date, db: Session = Depends(get_db)):
-    return db.query(models.Exit).filter(
-        models.Exit.company_id == company_id,
-        models.Exit.date == day,
+@app.put("/companies/{cid}/transaction-items/{item_id}", response_model=schemas.TransactionItemSchema)
+def update_transaction_item(cid: int, item_id: int, data: schemas.TransactionItemCreate, db: Session = Depends(get_db)):
+    ti = db.query(models.TransactionItem).join(models.Transaction).filter(
+        models.TransactionItem.id == item_id, models.Transaction.company_id == cid).first()
+    if not ti: raise HTTPException(404, "Not found.")
+    return crud.update_transaction_item(db, cid, ti, data)
+
+@app.delete("/companies/{cid}/transaction-items/{item_id}", status_code=204)
+def delete_transaction_item(cid: int, item_id: int, db: Session = Depends(get_db)):
+    ti = db.query(models.TransactionItem).join(models.Transaction).filter(
+        models.TransactionItem.id == item_id, models.Transaction.company_id == cid).first()
+    if not ti: raise HTTPException(404, "Not found.")
+    crud.delete_transaction_item(db, cid, ti)
+
+
+# ── Exits (headers) ────────────────────────────────────────────────────────
+
+@app.post("/companies/{cid}/days/{day}/exits", response_model=schemas.ExitSchema)
+def add_exit(cid: int, day: date, data: schemas.ExitCreate, db: Session = Depends(get_db)):
+    return crud._enrich_exit(crud.create_exit(db, cid, day, data))
+
+@app.get("/companies/{cid}/days/{day}/exits", response_model=List[schemas.ExitSchema])
+def get_exits(cid: int, day: date, db: Session = Depends(get_db)):
+    exs = db.query(models.Exit).filter(
+        models.Exit.company_id == cid, models.Exit.date == day,
     ).order_by(models.Exit.id).all()
+    return [crud._enrich_exit(e) for e in exs]
 
-@app.put("/companies/{company_id}/exits/{exit_id}", response_model=schemas.ExitSchema)
-def update_exit(company_id: int, exit_id: int, data: schemas.ExitCreate, db: Session = Depends(get_db)):
-    ex = db.query(models.Exit).filter(
-        models.Exit.id == exit_id, models.Exit.company_id == company_id).first()
-    if not ex: raise HTTPException(404, "Exit not found.")
-    return crud.update_exit(db, ex, data)
+@app.put("/companies/{cid}/exits/{eid}", response_model=schemas.ExitSchema)
+def update_exit(cid: int, eid: int, data: schemas.ExitCreate, db: Session = Depends(get_db)):
+    ex = db.query(models.Exit).filter(models.Exit.id == eid,
+                                       models.Exit.company_id == cid).first()
+    if not ex: raise HTTPException(404, "Not found.")
+    return crud._enrich_exit(crud.update_exit(db, ex, data))
 
-@app.delete("/companies/{company_id}/exits/{exit_id}", status_code=204)
-def delete_exit(company_id: int, exit_id: int, db: Session = Depends(get_db)):
-    ex = db.query(models.Exit).filter(
-        models.Exit.id == exit_id, models.Exit.company_id == company_id).first()
-    if not ex: raise HTTPException(404, "Exit not found.")
+@app.delete("/companies/{cid}/exits/{eid}", status_code=204)
+def delete_exit(cid: int, eid: int, db: Session = Depends(get_db)):
+    ex = db.query(models.Exit).filter(models.Exit.id == eid,
+                                       models.Exit.company_id == cid).first()
+    if not ex: raise HTTPException(404, "Not found.")
     db.delete(ex); db.commit()
 
 
-# ── Active days ───────────────────────────────────────────────────────────
+# ── Exit items ─────────────────────────────────────────────────────────────
 
-@app.get("/companies/{company_id}/active-days", response_model=List[str])
-def get_active_days(company_id: int, db: Session = Depends(get_db)):
-    tx_dates = db.query(models.Transaction.date).filter(
-        models.Transaction.company_id == company_id).distinct()
-    ex_dates = db.query(models.Exit.date).filter(
-        models.Exit.company_id == company_id).distinct()
-    all_dates = set()
-    for r in tx_dates: all_dates.add(r[0].isoformat())
-    for r in ex_dates: all_dates.add(r[0].isoformat())
-    return sorted(all_dates)
+@app.post("/companies/{cid}/exits/{eid}/items", response_model=schemas.ExitItemSchema)
+def add_exit_item(cid: int, eid: int, data: schemas.ExitItemCreate, db: Session = Depends(get_db)):
+    ex = db.query(models.Exit).filter(models.Exit.id == eid,
+                                       models.Exit.company_id == cid).first()
+    if not ex: raise HTTPException(404, "Exit not found.")
+    return crud.create_exit_item(db, cid, eid, data)
+
+@app.put("/companies/{cid}/exit-items/{item_id}", response_model=schemas.ExitItemSchema)
+def update_exit_item(cid: int, item_id: int, data: schemas.ExitItemCreate, db: Session = Depends(get_db)):
+    ei = db.query(models.ExitItem).join(models.Exit).filter(
+        models.ExitItem.id == item_id, models.Exit.company_id == cid).first()
+    if not ei: raise HTTPException(404, "Not found.")
+    return crud.update_exit_item(db, cid, ei, data)
+
+@app.delete("/companies/{cid}/exit-items/{item_id}", status_code=204)
+def delete_exit_item(cid: int, item_id: int, db: Session = Depends(get_db)):
+    ei = db.query(models.ExitItem).join(models.Exit).filter(
+        models.ExitItem.id == item_id, models.Exit.company_id == cid).first()
+    if not ei: raise HTTPException(404, "Not found.")
+    crud.delete_exit_item(db, cid, ei)
 
 
-# ── Daily report ──────────────────────────────────────────────────────────
+# ── Active days ────────────────────────────────────────────────────────────
 
-@app.get("/companies/{company_id}/days/{day}", response_model=schemas.DailyReport)
-def get_daily_report(company_id: int, day: date, db: Session = Depends(get_db)):
-    return crud.get_daily_report(db, company_id, day)
+@app.get("/companies/{cid}/active-days", response_model=List[str])
+def get_active_days(cid: int, db: Session = Depends(get_db)):
+    td = {r[0].isoformat() for r in db.query(models.Transaction.date).filter(
+        models.Transaction.company_id == cid).distinct()}
+    xd = {r[0].isoformat() for r in db.query(models.Exit.date).filter(
+        models.Exit.company_id == cid).distinct()}
+    return sorted(td | xd)
 
 
-# ── Summaries ─────────────────────────────────────────────────────────────
+# ── Daily report ───────────────────────────────────────────────────────────
 
-@app.get("/companies/{company_id}/summary/month/{year}/{month}",
+@app.get("/companies/{cid}/days/{day}", response_model=schemas.DailyReport)
+def get_daily_report(cid: int, day: date, db: Session = Depends(get_db)):
+    return crud.get_daily_report(db, cid, day)
+
+
+# ── Summaries ──────────────────────────────────────────────────────────────
+
+@app.get("/companies/{cid}/summary/month/{year}/{month}",
          response_model=schemas.MonthlySummaryResponse)
-def get_monthly_summary(company_id: int, year: int, month: int, db: Session = Depends(get_db)):
-    return crud.get_monthly_summary(db, company_id, year, month)
+def monthly(cid: int, year: int, month: int, db: Session = Depends(get_db)):
+    return crud.get_monthly_summary(db, cid, year, month)
 
-@app.get("/companies/{company_id}/summary/year/{year}",
+@app.get("/companies/{cid}/summary/year/{year}",
          response_model=schemas.YearlySummaryResponse)
-def get_yearly_summary(company_id: int, year: int, db: Session = Depends(get_db)):
-    return crud.get_yearly_summary(db, company_id, year)
+def yearly(cid: int, year: int, db: Session = Depends(get_db)):
+    return crud.get_yearly_summary(db, cid, year)
 
-
-# ── Utility ───────────────────────────────────────────────────────────────
 
 @app.get("/")
-def root(): return {"message": "Accounting Assistant API is running"}
-
+def root(): return {"message": "OK"}
 @app.get("/health")
 def health(): return {"status": "healthy"}

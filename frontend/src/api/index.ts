@@ -1,10 +1,12 @@
 import type {
   Company, CompanyCreate, Counterparty, CounterpartyCreate,
-  Transaction, TransactionCreate, Exit, ExitCreate,
+  Product, ProductCreate, InventoryItem,
+  Transaction, TransactionCreate, TransactionItemSchema, TransactionItemCreate,
+  ExitRecord, ExitCreate, ExitItemSchema, ExitItemCreate,
   DailyReport, MonthlySummaryResponse, YearlySummaryResponse,
 } from '../types';
 
-const BASE = 'http://localhost:8000';
+export const BASE = 'http://localhost:8000';
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -17,35 +19,53 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Companies
 export const getCompanies = () => req<Company[]>('/companies');
-export const createCompany = (data: CompanyCreate) =>
-  req<Company>('/companies', { method: 'POST', body: JSON.stringify(data) });
+export const createCompany = (d: CompanyCreate) =>
+  req<Company>('/companies', { method: 'POST', body: JSON.stringify(d) });
 
+// Counterparties
 export const getCounterparties = () => req<Counterparty[]>('/counterparties');
-export const createCounterparty = (data: CounterpartyCreate) =>
-  req<Counterparty>('/counterparties', { method: 'POST', body: JSON.stringify(data) });
-// Compat aliases
+export const createCounterparty = (d: CounterpartyCreate) =>
+  req<Counterparty>('/counterparties', { method: 'POST', body: JSON.stringify(d) });
 export const getSellers = getCounterparties;
 export const createSeller = createCounterparty;
 
-export const createTransaction = (companyId: number, day: string, data: TransactionCreate) =>
-  req<Transaction>(`/companies/${companyId}/days/${day}/transactions`, {
-    method: 'POST', body: JSON.stringify(data),
-  });
+// Products
+export const getProducts = (cid: number) => req<Product[]>(`/companies/${cid}/products`);
+export const createProduct = (cid: number, d: ProductCreate) =>
+  req<Product>(`/companies/${cid}/products`, { method: 'POST', body: JSON.stringify(d) });
 
-export const createExit = (companyId: number, day: string, data: ExitCreate) =>
-  req<Exit>(`/companies/${companyId}/days/${day}/exits`, {
-    method: 'POST', body: JSON.stringify(data),
-  });
+// Inventory
+export const getInventory = (cid: number) => req<InventoryItem[]>(`/companies/${cid}/inventory`);
 
-export const getActiveDays = (companyId: number) =>
-  req<string[]>(`/companies/${companyId}/active-days`);
+// Transactions
+export const getDailyReport = (cid: number, day: string) =>
+  req<DailyReport>(`/companies/${cid}/days/${day}`);
+export const createTransaction = (cid: number, day: string, d: TransactionCreate) =>
+  req<Transaction>(`/companies/${cid}/days/${day}/transactions`, { method: 'POST', body: JSON.stringify(d) });
 
-export const getDailyReport = (companyId: number, day: string) =>
-  req<DailyReport>(`/companies/${companyId}/days/${day}`);
+// Transaction items
+export const createTransactionItem = (cid: number, tid: number, d: TransactionItemCreate) =>
+  req<TransactionItemSchema>(`/companies/${cid}/transactions/${tid}/items`, { method: 'POST', body: JSON.stringify(d) });
+export const deleteTransactionItem = (cid: number, itemId: number) =>
+  fetch(`${BASE}/companies/${cid}/transaction-items/${itemId}`, { method: 'DELETE' });
 
-export const getMonthlySummary = (companyId: number, year: number, month: number) =>
-  req<MonthlySummaryResponse>(`/companies/${companyId}/summary/month/${year}/${month}`);
+// Exits
+export const createExit = (cid: number, day: string, d: ExitCreate) =>
+  req<ExitRecord>(`/companies/${cid}/days/${day}/exits`, { method: 'POST', body: JSON.stringify(d) });
 
-export const getYearlySummary = (companyId: number, year: number) =>
-  req<YearlySummaryResponse>(`/companies/${companyId}/summary/year/${year}`);
+// Exit items
+export const createExitItem = (cid: number, eid: number, d: ExitItemCreate) =>
+  req<ExitItemSchema>(`/companies/${cid}/exits/${eid}/items`, { method: 'POST', body: JSON.stringify(d) });
+export const deleteExitItem = (cid: number, itemId: number) =>
+  fetch(`${BASE}/companies/${cid}/exit-items/${itemId}`, { method: 'DELETE' });
+
+// Active days
+export const getActiveDays = (cid: number) => req<string[]>(`/companies/${cid}/active-days`);
+
+// Summaries
+export const getMonthlySummary = (cid: number, year: number, month: number) =>
+  req<MonthlySummaryResponse>(`/companies/${cid}/summary/month/${year}/${month}`);
+export const getYearlySummary = (cid: number, year: number) =>
+  req<YearlySummaryResponse>(`/companies/${cid}/summary/year/${year}`);

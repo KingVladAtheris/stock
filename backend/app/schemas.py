@@ -5,22 +5,16 @@ from decimal import Decimal
 from typing import List, Optional
 
 
-# ── Counterparty (unified seller / buyer) ──────────────────────────────────
+# ── Counterparty ───────────────────────────────────────────────────────────
 
-class CounterpartyBase(BaseModel):
+class CounterpartyCreate(BaseModel):
     name: str
     tax_id: str
 
-class CounterpartyCreate(CounterpartyBase):
-    pass
-
-class Counterparty(CounterpartyBase):
+class Counterparty(CounterpartyCreate):
     id: int
-    class Config:
-        from_attributes = True
+    class Config: from_attributes = True
 
-# Keep backward-compat aliases
-SellerBase = CounterpartyBase
 SellerCreate = CounterpartyCreate
 Seller = Counterparty
 
@@ -31,105 +25,150 @@ class CompanyCreate(BaseModel):
     name: str
     tax_id: str
     chamber_id: Optional[str] = None
-    opening_stock: Decimal = Decimal(0)
+    opening_stock_no_vat: Decimal = Decimal(0)
+    opening_stock_vat:    Decimal = Decimal(0)
+    opening_stock_total:  Decimal = Decimal(0)
 
 class Company(BaseModel):
     id: int
     name: str
     tax_id: str
     chamber_id: Optional[str] = None
-    opening_stock: Decimal
-    class Config:
-        from_attributes = True
+    opening_stock_no_vat: Decimal
+    opening_stock_vat:    Decimal
+    opening_stock_total:  Decimal
+    class Config: from_attributes = True
 
 
-# ── Transaction (entry) ────────────────────────────────────────────────────
+# ── Product ────────────────────────────────────────────────────────────────
 
-class TransactionBase(BaseModel):
-    seller_id: int
-    invoice_number: Optional[str] = None
-    register_entry_number: Optional[str] = None
-    purchase_no_tax: Decimal
+class ProductCreate(BaseModel):
+    name: str
+
+class Product(BaseModel):
+    id: int
+    company_id: int
+    name: str
+    class Config: from_attributes = True
+
+
+# ── Inventory ──────────────────────────────────────────────────────────────
+
+class InventoryItem(BaseModel):
+    product_id:   int
+    product_name: str
+    stock_no_vat: Decimal
+    stock_vat:    Decimal
+    stock_total:  Decimal
+    class Config: from_attributes = True
+
+
+# ── Transaction items ──────────────────────────────────────────────────────
+
+class TransactionItemCreate(BaseModel):
+    product_id:          int
+    purchase_no_tax:     Decimal
     purchase_tax_amount: Decimal
-    total_resale: Decimal
+    total_resale:        Decimal
 
-class TransactionCreate(TransactionBase):
-    pass
-
-class Transaction(TransactionBase):
-    id: int
-    date: date
+class TransactionItemSchema(TransactionItemCreate):
+    id:            int
+    transaction_id: int
     total_purchase: Decimal
-    tax_factor: float
-    resale_no_tax: Decimal
-    resale_vat: Decimal
-    markup: Decimal
+    tax_factor:     float
+    resale_no_tax:  Decimal
+    resale_vat:     Decimal
+    markup:         Decimal
+    product:        Optional[Product] = None
+    class Config: from_attributes = True
+
+
+# ── Transaction (entry header) ─────────────────────────────────────────────
+
+class TransactionCreate(BaseModel):
+    seller_id:             int
+    invoice_number:        Optional[str] = None
+    register_entry_number: Optional[str] = None
+
+class Transaction(TransactionCreate):
+    id:         int
+    date:       date
+    # Aggregated totals (computed from items)
+    purchase_no_tax:     Decimal = Decimal(0)
+    purchase_tax_amount: Decimal = Decimal(0)
+    total_purchase:      Decimal = Decimal(0)
+    total_resale:        Decimal = Decimal(0)
+    resale_no_tax:       Decimal = Decimal(0)
+    resale_vat:          Decimal = Decimal(0)
+    markup:              Decimal = Decimal(0)
     seller: Optional[Counterparty] = None
-    class Config:
-        from_attributes = True
+    items:  List[TransactionItemSchema] = []
+    class Config: from_attributes = True
 
 
-# ── Exit ──────────────────────────────────────────────────────────────────
+# ── Exit items ─────────────────────────────────────────────────────────────
 
-class ExitBase(BaseModel):
-    buyer_id: int
-    document_number: Optional[str] = None
-    total_sale: Decimal
-    vat_amount: Decimal
+class ExitItemCreate(BaseModel):
+    product_id: int
+    total_sale:    Decimal
+    vat_amount:    Decimal
 
-class ExitCreate(ExitBase):
-    pass
-
-class ExitSchema(ExitBase):
-    id: int
-    date: date
+class ExitItemSchema(ExitItemCreate):
+    id:               int
+    exit_id:          int
     total_sale_no_vat: Decimal
+    product:          Optional[Product] = None
+    class Config: from_attributes = True
+
+
+# ── Exit (header) ──────────────────────────────────────────────────────────
+
+class ExitCreate(BaseModel):
+    buyer_id:        int
+    document_number: Optional[str] = None
+
+class ExitSchema(ExitCreate):
+    id:   int
+    date: date
+    # Aggregated totals
+    total_sale:       Decimal = Decimal(0)
+    vat_amount:       Decimal = Decimal(0)
+    total_sale_no_vat: Decimal = Decimal(0)
     buyer: Optional[Counterparty] = None
-    class Config:
-        from_attributes = True
+    items: List[ExitItemSchema] = []
+    class Config: from_attributes = True
 
 
-# ── Daily sales (legacy) ───────────────────────────────────────────────────
+# ── Stock split helper ─────────────────────────────────────────────────────
 
-class DailySalesInputSchema(BaseModel):
-    total_sale: Decimal
+class StockTriple(BaseModel):
+    no_vat: Decimal
+    vat:    Decimal
+    total:  Decimal
 
 
-# ── Totals block ───────────────────────────────────────────────────────────
+# ── Period totals ──────────────────────────────────────────────────────────
 
 class PeriodTotals(BaseModel):
-    """Aggregated purchase + exit totals for a period (day / month / year)."""
-    purchase_no_tax: Decimal
-    purchase_vat: Decimal
-    total_purchase: Decimal
-    exit_no_vat: Decimal
-    exit_vat: Decimal
-    total_exit: Decimal
+    purchase_no_tax: Decimal; purchase_vat: Decimal; total_purchase: Decimal
+    exit_no_vat:     Decimal; exit_vat:     Decimal; total_exit:     Decimal
 
 
-# ── Daily report ──────────────────────────────────────────────────────────
+# ── Daily report ───────────────────────────────────────────────────────────
 
 class DailyReport(BaseModel):
-    date: date
+    date:         date
     transactions: List[Transaction]
-    exits: List[ExitSchema]
+    exits:        List[ExitSchema]
     # Entry totals
-    total_purchase_no_tax: Decimal
-    total_purchase_vat: Decimal
-    total_purchase: Decimal
-    total_resale_no_tax: Decimal
-    total_resale_vat: Decimal
-    total_resale: Decimal
-    total_markup: Decimal
+    total_purchase_no_tax: Decimal; total_purchase_vat: Decimal; total_purchase: Decimal
+    total_resale_no_tax:   Decimal; total_resale_vat:   Decimal; total_resale:   Decimal
+    total_markup:          Decimal
     # Exit totals
-    total_exit_no_vat: Decimal
-    total_exit_vat: Decimal
-    total_exit: Decimal
-    # Stock
-    net_inventory_change: Decimal
-    stock_end_of_day: Decimal
-    previous_stock: Decimal
-    # Previous day totals
+    total_exit_no_vat: Decimal; total_exit_vat: Decimal; total_exit: Decimal
+    # Stock (split)
+    previous_stock: StockTriple
+    stock_end_of_day: StockTriple
     prev_totals: PeriodTotals
 
 
@@ -137,65 +176,39 @@ class DailyReport(BaseModel):
 
 class DaySummary(BaseModel):
     date: str
-    # Entries
-    total_purchase_no_tax: Decimal
-    total_purchase_vat: Decimal
-    total_purchase: Decimal
-    total_resale_no_tax: Decimal
-    total_resale_vat: Decimal
-    total_resale: Decimal
+    total_purchase_no_tax: Decimal; total_purchase_vat: Decimal; total_purchase: Decimal
+    total_resale_no_tax:   Decimal; total_resale_vat:   Decimal; total_resale:   Decimal
     total_markup: Decimal
-    # Exits
-    total_exit_no_vat: Decimal
-    total_exit_vat: Decimal
-    total_exit: Decimal
-    # Stock
-    net_change: Decimal
-    stock_end_of_day: Decimal
+    total_exit_no_vat: Decimal; total_exit_vat: Decimal; total_exit: Decimal
+    net_change_no_vat: Decimal; net_change_vat: Decimal; net_change: Decimal
+    stock_no_vat: Decimal; stock_vat: Decimal; stock_total: Decimal
 
 
 class MonthSummary(BaseModel):
-    month: int
-    year: int
-    # Entries
-    total_purchase_no_tax: Decimal
-    total_purchase_vat: Decimal
-    total_purchase: Decimal
-    total_resale_no_tax: Decimal
-    total_resale_vat: Decimal
-    total_resale: Decimal
+    month: int; year: int
+    total_purchase_no_tax: Decimal; total_purchase_vat: Decimal; total_purchase: Decimal
+    total_resale_no_tax:   Decimal; total_resale_vat:   Decimal; total_resale:   Decimal
     total_markup: Decimal
-    # Exits
-    total_exit_no_vat: Decimal
-    total_exit_vat: Decimal
-    total_exit: Decimal
-    # Stock
-    net_change: Decimal
-    stock_end_of_month: Decimal
+    total_exit_no_vat: Decimal; total_exit_vat: Decimal; total_exit: Decimal
+    net_change_no_vat: Decimal; net_change_vat: Decimal; net_change: Decimal
+    stock_no_vat: Decimal; stock_vat: Decimal; stock_total: Decimal
 
 
 class SummaryTotalsRow(BaseModel):
-    """Bottom totals row for monthly/yearly summary pages."""
-    purchase_no_tax: Decimal
-    purchase_vat: Decimal
-    total_purchase: Decimal
-    resale_no_tax: Decimal
-    resale_vat: Decimal
-    total_resale: Decimal
-    exit_no_vat: Decimal
-    exit_vat: Decimal
-    total_exit: Decimal
-    stock_start: Decimal
-    stock_end: Decimal
+    purchase_no_tax: Decimal; purchase_vat: Decimal; total_purchase: Decimal
+    resale_no_tax:   Decimal; resale_vat:   Decimal; total_resale:   Decimal
+    exit_no_vat:     Decimal; exit_vat:     Decimal; total_exit:     Decimal
+    stock_start_no_vat: Decimal; stock_start_vat: Decimal; stock_start: Decimal
+    stock_end_no_vat:   Decimal; stock_end_vat:   Decimal; stock_end:   Decimal
 
 
 class MonthlySummaryResponse(BaseModel):
-    rows: List[DaySummary]
-    period_totals: SummaryTotalsRow
-    prev_totals: SummaryTotalsRow   # previous month
+    rows:           List[DaySummary]
+    period_totals:  SummaryTotalsRow
+    prev_totals:    SummaryTotalsRow
 
 
 class YearlySummaryResponse(BaseModel):
-    rows: List[MonthSummary]
-    period_totals: SummaryTotalsRow
-    prev_totals: SummaryTotalsRow   # previous year
+    rows:           List[MonthSummary]
+    period_totals:  SummaryTotalsRow
+    prev_totals:    SummaryTotalsRow
