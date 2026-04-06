@@ -288,18 +288,6 @@ def _opening(company: models.Company):
 
 def _stock_before(db: Session, company_id: int, before_date: date,
                   opening_no_vat: Decimal, opening_vat: Decimal, opening_total: Decimal):
-    # Resale sums per day < before_date
-    entry_rows = db.query(
-        models.TransactionItem.transaction_id,
-        func.sum(models.TransactionItem.resale_no_tax).label("rnt"),
-        func.sum(models.TransactionItem.resale_vat).label("rv"),
-        func.sum(models.TransactionItem.total_resale).label("tr"),
-    ).join(models.Transaction).filter(
-        models.Transaction.company_id == company_id,
-        models.Transaction.date < before_date,
-    ).group_by(models.TransactionItem.transaction_id).all()
-
-    # We need per-date aggregation
     tx_dates = db.query(
         models.Transaction.date,
         func.sum(models.TransactionItem.resale_no_tax).label("rnt"),
@@ -325,9 +313,11 @@ def _stock_before(db: Session, company_id: int, before_date: date,
     nv, vat, total = opening_no_vat, opening_vat, opening_total
     for row in sorted(tx_dates, key=lambda r: r.date):
         ed = exit_dict.get(row.date)
-        nv    += row.rnt  - (ed.nv  if ed else D0)
-        vat   += row.rv   - (ed.vat if ed else D0)
-        total += row.tr   - (ed.ts  if ed else D0)
+        dnv = row.rnt - (ed.nv  if ed else D0)
+        dv  = row.rv  - (ed.vat if ed else D0)
+        nv    += dnv
+        vat   += dv
+        total  = nv + vat
     return nv, vat, total
 
 
@@ -383,7 +373,7 @@ def get_daily_report(db: Session, company_id: int, target_date: date):
     prev_nv, prev_vat, prev_tot = _stock_before(db, company_id, target_date, op_nv, op_vat, op_tot)
     eod_nv  = prev_nv  + et.rnt - xt.nv
     eod_vat = prev_vat + et.rv  - xt.vat
-    eod_tot = prev_tot + et.tr  - xt.ts
+    eod_tot = eod_nv + eod_vat
 
     prev_date = target_date - timedelta(days=1)
     pet = _period_entry_totals(db, company_id, prev_date, prev_date)
@@ -400,8 +390,8 @@ def get_daily_report(db: Session, company_id: int, target_date: date):
         previous_stock=schemas.StockTriple(no_vat=prev_nv, vat=prev_vat, total=prev_tot),
         stock_end_of_day=schemas.StockTriple(no_vat=eod_nv, vat=eod_vat, total=eod_tot),
         prev_totals=schemas.PeriodTotals(
-            purchase_no_tax=pet.pnt, purchase_vat=pet.pvat, total_purchase=pet.tp,
-            exit_no_vat=pxt.nv,     exit_vat=pxt.vat,      total_exit=pxt.ts,
+            resale_no_tax=pet.rnt, resale_vat=pet.rv,  total_resale=pet.tr,
+            exit_no_vat=pxt.nv,   exit_vat=pxt.vat,   total_exit=pxt.ts,
         ),
     )
 
@@ -449,19 +439,19 @@ def get_monthly_summary(db: Session, company_id: int, year: int, month: int):
     rows = []
     for d in all_days:
         e = ed.get(d); x = xd.get(d)
-        rnt = e.rnt if e else D0; rv  = e.rv if e else D0; tr = e.tr if e else D0
+        rnt = e.rnt if e else D0; rv  = e.rv if e else D0
         nv  = x.nv  if x else D0; vat = x.vat if x else D0; ts = x.ts if x else D0
-        dnv = rnt - nv; dv = rv - vat; dt = tr - ts
-        snv += dnv; sv += dv; st += dt
+        dnv = rnt - nv; dv = rv - vat
+        snv += dnv; sv += dv; st = snv + sv
         rows.append(schemas.DaySummary(
             date=d.isoformat(),
             total_purchase_no_tax=e.pnt if e else D0,
             total_purchase_vat=e.pvat if e else D0,
             total_purchase=e.tp if e else D0,
-            total_resale_no_tax=rnt, total_resale_vat=rv, total_resale=tr,
+            total_resale_no_tax=rnt, total_resale_vat=rv, total_resale=e.tr if e else D0,
             total_markup=e.mu if e else D0,
             total_exit_no_vat=nv, total_exit_vat=vat, total_exit=ts,
-            net_change_no_vat=dnv, net_change_vat=dv, net_change=dt,
+            net_change_no_vat=dnv, net_change_vat=dv, net_change=dnv + dv,
             stock_no_vat=snv, stock_vat=sv, stock_total=st,
         ))
 
@@ -534,19 +524,19 @@ def get_yearly_summary(db: Session, company_id: int, year: int):
     rows = []
     for m in all_months:
         e = em.get(m); x = xm.get(m)
-        rnt = e.rnt if e else D0; rv  = e.rv  if e else D0; tr = e.tr if e else D0
+        rnt = e.rnt if e else D0; rv  = e.rv  if e else D0
         nv  = x.nv  if x else D0; vat = x.vat if x else D0; ts = x.ts if x else D0
-        dnv = rnt - nv; dv = rv - vat; dt = tr - ts
-        snv += dnv; sv += dv; st += dt
+        dnv = rnt - nv; dv = rv - vat
+        snv += dnv; sv += dv; st = snv + sv
         rows.append(schemas.MonthSummary(
             month=m, year=year,
             total_purchase_no_tax=e.pnt if e else D0,
             total_purchase_vat=e.pvat if e else D0,
             total_purchase=e.tp if e else D0,
-            total_resale_no_tax=rnt, total_resale_vat=rv, total_resale=tr,
+            total_resale_no_tax=rnt, total_resale_vat=rv, total_resale=e.tr if e else D0,
             total_markup=e.mu if e else D0,
             total_exit_no_vat=nv, total_exit_vat=vat, total_exit=ts,
-            net_change_no_vat=dnv, net_change_vat=dv, net_change=dt,
+            net_change_no_vat=dnv, net_change_vat=dv, net_change=dnv + dv,
             stock_no_vat=snv, stock_vat=sv, stock_total=st,
         ))
 

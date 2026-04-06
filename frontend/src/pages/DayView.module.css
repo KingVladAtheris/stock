@@ -78,6 +78,7 @@
 .cellInput:focus { border-color: var(--accent); }
 .cellInput::placeholder { color: var(--text-faint); }
 .computed { color: var(--text-muted); font-style: italic; }
+.markupCell { color: var(--success); font-family: var(--font-mono); }
 .selectedSeller { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; font-weight: 500; color: var(--text); }
 .clearSeller { color: var(--text-muted); font-size: 14px; line-height: 1; padding: 0 2px; background: none; border: none; cursor: pointer; }
 .clearSeller:hover { color: var(--danger); }

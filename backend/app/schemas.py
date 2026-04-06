@@ -150,8 +150,8 @@ class StockTriple(BaseModel):
 # ── Period totals ──────────────────────────────────────────────────────────
 
 class PeriodTotals(BaseModel):
-    purchase_no_tax: Decimal; purchase_vat: Decimal; total_purchase: Decimal
-    exit_no_vat:     Decimal; exit_vat:     Decimal; total_exit:     Decimal
+    resale_no_tax: Decimal; resale_vat: Decimal; total_resale: Decimal
+    exit_no_vat:   Decimal; exit_vat:   Decimal; total_exit:   Decimal
 
 
 # ── Daily report ───────────────────────────────────────────────────────────

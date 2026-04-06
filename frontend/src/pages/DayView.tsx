@@ -282,6 +282,7 @@ export default function DayView({ company, date, onBack }: Props) {
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted} ${styles.resaleCol}`}>{fmt(item.resale_vat)}</td>
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted} ${styles.resaleCol}`}>{fmt(item.resale_no_tax)}</td>
         <td className={`${styles.td} ${styles.center}`}><span className={styles.vatBadge}>{vat}</span></td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.markupCell}`}>{fmt(item.markup)}</td>
         <td className={`${styles.td} ${styles.center}`}>
           {!locked && (
             <button className={styles.deleteRowBtn} onClick={() => delEntryItem(item.id)} title="Șterge">✕</button>
@@ -328,6 +329,7 @@ export default function DayView({ company, date, onBack }: Props) {
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed} ${styles.resaleCol}`}>{pre.c_rv ? fmt(pre.c_rv) : '—'}</td>
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed} ${styles.resaleCol}`}>{pre.c_rnt ? fmt(pre.c_rnt) : '—'}</td>
         <td className={`${styles.td} ${styles.center}`}><span className={styles.vatBadge}>{pre.c_vat_pct}</span></td>
+        <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed}`}>{pre.c_mu ? fmt(pre.c_mu) : '—'}</td>
         <td className={`${styles.td} ${styles.center}`}>
           <div className={styles.rowActions}>
             <button className={styles.acceptBtn} onClick={() => submitEntryItem(txId)} disabled={!valid} title="Confirmă (Enter)">✓</button>
@@ -448,13 +450,14 @@ export default function DayView({ company, date, onBack }: Props) {
               <td className={`${styles.td} ${styles.right} ${styles.muted} ${styles.resaleCol}`} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>TVA vânz.</td>
               <td className={`${styles.td} ${styles.right} ${styles.muted} ${styles.resaleCol}`} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Fără TVA</td>
               <td className={`${styles.td} ${styles.center} ${styles.muted}`} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Cotă</td>
+              <td className={`${styles.td} ${styles.right} ${styles.muted}`} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Adaos</td>
               <td className={styles.td} />
             </tr>
             {tx.items.map(item => renderSavedEntryItem(item))}
             {renderDraftEntryItem(tx.id)}
             {!locked && !hasDraftItem && (
               <tr className={styles.addItemRow}>
-                <td colSpan={9} className={styles.td}>
+                <td colSpan={10} className={styles.td}>
                   <button className={styles.addItemBtn}
                     onClick={() => setDraftEntryItems(p => ({ ...p, [tx.id]: emptyEntryItem() }))}>
                     + Adaugă produs
@@ -589,17 +592,18 @@ export default function DayView({ company, date, onBack }: Props) {
                     <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>TVA</th>
                     <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Fără TVA</th>
                     <th className={`${styles.th} ${styles.thResale} ${styles.center}`}>Cotă</th>
+                    <th className={`${styles.th} ${styles.thResale} ${styles.right}`}>Adaos</th>
                     <th className={`${styles.th} ${styles.thActions}`} />
                   </tr>
                   <tr className={styles.subHeaderRow}>
                     <th colSpan={4} /><th colSpan={3} className={`${styles.subHeader} ${styles.subHeaderPurchase}`}>CUMPĂRARE</th>
-                    <th colSpan={4} className={`${styles.subHeader} ${styles.subHeaderResale}`}>LA PREȚUL DE ACHIZIȚIE</th>
+                    <th colSpan={5} className={`${styles.subHeader} ${styles.subHeaderResale}`}>LA PREȚUL DE ACHIZIȚIE</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   {(p?.transactions ?? []).length === 0 && !draftTx && (
-                    <tr className={styles.emptyRow}><td colSpan={12}>{locked ? 'Nicio intrare.' : 'Nicio intrare. Adaugă un rând.'}</td></tr>
+                    <tr className={styles.emptyRow}><td colSpan={13}>{locked ? 'Nicio intrare.' : 'Nicio intrare. Adaugă un rând.'}</td></tr>
                   )}
                   {(p?.transactions ?? []).map(tx => renderTxRow(tx))}
 
@@ -616,7 +620,7 @@ export default function DayView({ company, date, onBack }: Props) {
                       <td className={`${styles.td} ${styles.mono} ${styles.muted}`}>{draftTx.seller?.tax_id ?? ''}</td>
                       <td className={styles.td}><input className={styles.cellInput} value={draftTx.invoice} onChange={e => setDraftTx(d => d ? { ...d, invoice: e.target.value } : d)} placeholder="—" /></td>
                       <td className={styles.td}><input className={styles.cellInput} value={draftTx.register} onChange={e => setDraftTx(d => d ? { ...d, register: e.target.value } : d)} placeholder="—" /></td>
-                      <td colSpan={7} className={styles.td} />
+                      <td colSpan={8} className={styles.td} />
                       <td className={`${styles.td} ${styles.center}`}>
                         <div className={styles.rowActions}>
                           <button className={styles.acceptBtn} onClick={submitDraftTx} disabled={!draftTx.seller || saving} title="Confirmă">✓</button>
@@ -639,7 +643,7 @@ export default function DayView({ company, date, onBack }: Props) {
                     <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.bold} ${styles.resaleCol}`}>{fmt(entryTotalTr)}</td>
                     <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted} ${styles.resaleCol}`}>{fmt(entryTotalRv)}</td>
                     <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.totalVal} ${styles.muted} ${styles.resaleCol}`}>{fmt(entryTotalRnt)}</td>
-                    <td className={styles.td} /><td className={styles.td} />
+                    <td className={styles.td} /><td className={styles.td} /><td className={styles.td} />
                   </tr>
                 </tfoot>
               </table>
@@ -727,9 +731,9 @@ export default function DayView({ company, date, onBack }: Props) {
           <div className={styles.totalsBlock}>
             <div className={styles.totalsBlockLabel}>Ziua anterioară</div>
             <div className={styles.totalsGrid}>
-              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Intrări fără TVA</span><span className={styles.totalsCellVal}>{fmt(p.prev_totals.purchase_no_tax)}</span></div>
-              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>TVA intrări</span><span className={styles.totalsCellVal}>{fmt(p.prev_totals.purchase_vat)}</span></div>
-              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Total intrări</span><span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(p.prev_totals.total_purchase)}</span></div>
+              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Intrări fără TVA</span><span className={styles.totalsCellVal}>{fmt(p.prev_totals.resale_no_tax)}</span></div>
+              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>TVA intrări</span><span className={styles.totalsCellVal}>{fmt(p.prev_totals.resale_vat)}</span></div>
+              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Total intrări</span><span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(p.prev_totals.total_resale)}</span></div>
               <div className={styles.totalsDivider} />
               <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Ieșiri fără TVA</span><span className={styles.totalsCellVal}>{fmt(p.prev_totals.exit_no_vat)}</span></div>
               <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>TVA ieșiri</span><span className={styles.totalsCellVal}>{fmt(p.prev_totals.exit_vat)}</span></div>
@@ -740,9 +744,9 @@ export default function DayView({ company, date, onBack }: Props) {
           <div className={`${styles.totalsBlock} ${styles.totalsBlockToday}`}>
             <div className={styles.totalsBlockLabel}>Ziua curentă</div>
             <div className={styles.totalsGrid}>
-              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Intrări fără TVA</span><span className={styles.totalsCellVal}>{fmt(p.total_purchase_no_tax)}</span></div>
-              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>TVA intrări</span><span className={styles.totalsCellVal}>{fmt(p.total_purchase_vat)}</span></div>
-              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Total intrări</span><span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(p.total_purchase)}</span></div>
+              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Intrări fără TVA</span><span className={styles.totalsCellVal}>{fmt(p.total_resale_no_tax)}</span></div>
+              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>TVA intrări</span><span className={styles.totalsCellVal}>{fmt(p.total_resale_vat)}</span></div>
+              <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Total intrări</span><span className={`${styles.totalsCellVal} ${styles.bold}`}>{fmt(p.total_resale)}</span></div>
               <div className={styles.totalsDivider} />
               <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>Ieșiri fără TVA</span><span className={styles.totalsCellVal}>{fmt(p.total_exit_no_vat)}</span></div>
               <div className={styles.totalsCell}><span className={styles.totalsCellLabel}>TVA ieșiri</span><span className={styles.totalsCellVal}>{fmt(p.total_exit_vat)}</span></div>

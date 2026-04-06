@@ -4,6 +4,7 @@ import type { Company, InventoryItem } from '../types';
 import { getInventory } from '../api';
 import { exportToPDF, exportToExcel, type ExportColumn, type ExportRow } from '../utils/exportUtils';
 import styles from './Summary.module.css';
+import invStyles from './InventoryView.module.css';
 
 const fmt = (v: string | number) =>
   Number(v).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -12,8 +13,6 @@ interface Props { company: Company; onBack: () => void; }
 
 const COLS: ExportColumn[] = [
   { header: 'Produs', key: 'name', align: 'left' },
-  { header: 'Stoc fără TVA', key: 'no_vat', align: 'right' },
-  { header: 'TVA', key: 'vat', align: 'right' },
   { header: 'Stoc total', key: 'total', align: 'right' },
 ];
 
@@ -21,30 +20,25 @@ export default function InventoryView({ company, onBack }: Props) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<'all' | 'positive'>('positive');
+  const [textFilter, setTextFilter] = useState('');
 
   useEffect(() => {
     getInventory(company.id)
-      .then(data => setItems(data.sort((a,b) => a.product_name.localeCompare(b.product_name))))
+      .then(data => setItems(data.sort((a, b) => a.product_name.localeCompare(b.product_name))))
       .catch(e => setError((e as Error).message))
       .finally(() => setLoading(false));
   }, [company.id]);
 
-  const shown = filter === 'positive'
-    ? items.filter(i => parseFloat(i.stock_total) > 0)
-    : items;
+  // Only show items with stock > 0, then apply text filter
+  const shown = items
+    .filter(i => parseFloat(i.stock_total) > 0)
+    .filter(i => !textFilter.trim() || i.product_name.toLowerCase().includes(textFilter.toLowerCase()));
 
-  const totals = shown.reduce((acc, i) => ({
-    no_vat: acc.no_vat + parseFloat(i.stock_no_vat),
-    vat:    acc.vat    + parseFloat(i.stock_vat),
-    total:  acc.total  + parseFloat(i.stock_total),
-  }), { no_vat: 0, vat: 0, total: 0 });
+  const grandTotal = shown.reduce((acc, i) => acc + parseFloat(i.stock_total), 0);
 
   const exportRows: ExportRow[] = shown.map(i => ({
     name: i.product_name,
-    no_vat: fmt(i.stock_no_vat),
-    vat:    fmt(i.stock_vat),
-    total:  fmt(i.stock_total),
+    total: fmt(i.stock_total),
   }));
 
   const handleExport = (f: 'pdf' | 'excel') => {
@@ -65,25 +59,34 @@ export default function InventoryView({ company, onBack }: Props) {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <select
-            style={{ fontSize: 12, padding: '5px 10px', border: '1px solid #3a3937', borderRadius: 6, background: 'transparent', color: 'var(--chrome-muted)', cursor: 'pointer' }}
-            value={filter}
-            onChange={e => setFilter(e.target.value as 'all' | 'positive')}
-          >
-            <option value="positive">Doar în stoc</option>
-            <option value="all">Toate produsele</option>
-          </select>
           <button className={styles.exportBtn} onClick={() => handleExport('pdf')}>↓ PDF</button>
           <button className={styles.exportBtn} onClick={() => handleExport('excel')}>↓ Excel</button>
         </div>
       </header>
+
+      <div className={invStyles.filterBar}>
+        <input
+          className={invStyles.filterInput}
+          type="text"
+          placeholder="Filtrează produse..."
+          value={textFilter}
+          onChange={e => setTextFilter(e.target.value)}
+          autoFocus
+        />
+        {textFilter && (
+          <button className={invStyles.filterClear} onClick={() => setTextFilter('')}>×</button>
+        )}
+        <span className={invStyles.filterCount}>
+          {shown.length} {shown.length === 1 ? 'produs' : 'produse'}
+        </span>
+      </div>
 
       <div className={styles.tableWrap}>
         {loading && <div className={styles.empty}>Se încarcă...</div>}
         {error && <div className={styles.errorBar}>{error}</div>}
         {!loading && !error && shown.length === 0 && (
           <div className={styles.empty}>
-            {filter === 'positive' ? 'Inventarul este gol.' : 'Niciun produs înregistrat.'}
+            {textFilter ? 'Niciun produs nu corespunde filtrului.' : 'Inventarul este gol.'}
           </div>
         )}
         {!loading && shown.length > 0 && (
@@ -91,30 +94,27 @@ export default function InventoryView({ company, onBack }: Props) {
             <thead>
               <tr>
                 <th className={`${styles.th} ${styles.left}`}>Produs</th>
-                <th className={`${styles.th} ${styles.right}`}>Stoc fără TVA</th>
-                <th className={`${styles.th} ${styles.right}`}>TVA</th>
                 <th className={`${styles.th} ${styles.right} ${styles.stockCol}`}>Stoc total</th>
               </tr>
             </thead>
             <tbody>
-              {shown.map(i => {
-                const isLow = parseFloat(i.stock_total) <= 0;
-                return (
-                  <tr key={i.product_id} className={styles.row}>
-                    <td className={`${styles.td} ${styles.left} ${styles.label}`}>{i.product_name}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${isLow ? styles.neg : ''}`}>{fmt(i.stock_no_vat)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(i.stock_vat)}</td>
-                    <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold} ${isLow ? styles.neg : ''}`}>{fmt(i.stock_total)}</td>
-                  </tr>
-                );
-              })}
+              {shown.map(i => (
+                <tr key={i.product_id} className={styles.row}>
+                  <td className={`${styles.td} ${styles.left} ${styles.label}`}>{i.product_name}</td>
+                  <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold}`}>
+                    {fmt(i.stock_total)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
             <tfoot>
               <tr className={styles.periodTotalsRow}>
-                <td className={`${styles.td} ${styles.totalsLabel}`}>Total inventar</td>
-                <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(totals.no_vat)}</td>
-                <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.muted}`}>{fmt(totals.vat)}</td>
-                <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold}`}>{fmt(totals.total)}</td>
+                <td className={`${styles.td} ${styles.totalsLabel}`}>
+                  Total inventar{textFilter ? ` (filtrat)` : ''}
+                </td>
+                <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.stockCol} ${styles.bold}`}>
+                  {fmt(grandTotal)}
+                </td>
               </tr>
             </tfoot>
           </table>

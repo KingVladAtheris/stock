@@ -58,7 +58,7 @@ export interface ExitCreate { buyer_id: number; document_number?: string; }
 export interface StockTriple { no_vat: string; vat: string; total: string; }
 
 export interface PeriodTotals {
-  purchase_no_tax: string; purchase_vat: string; total_purchase: string;
+  resale_no_tax: string; resale_vat: string; total_resale: string;
   exit_no_vat: string; exit_vat: string; total_exit: string;
 }
 
