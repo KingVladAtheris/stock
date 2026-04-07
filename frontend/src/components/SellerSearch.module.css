@@ -1,32 +1,35 @@
-.wrap {
-  position: relative;
-}
+/* ── SellerSearch / ProductSearch ─────────────────────────────────────────
+   Shared by SellerSearch.tsx and ProductSearch.tsx
+   ─────────────────────────────────────────────────────────────────────── */
+
+.wrap { position: relative; }
 
 .input {
-  width: 200px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
+  width: 180px;
+  padding: 5px 8px;
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: 12px;
+  font-family: var(--font-ui);
   background: var(--surface);
-  color: var(--text);
+  color: var(--text-1);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.12s, background 0.12s;
 }
-.input:focus { border-color: var(--accent); }
-.input::placeholder { color: var(--text-faint); }
+.input:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 2px rgba(43,99,212,0.1); }
+.input::placeholder { color: var(--text-4); }
 
 .dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 3px);
   left: 0;
-  min-width: 280px;
+  min-width: 240px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
   list-style: none;
-  z-index: 50;
+  z-index: 100;
   overflow: hidden;
 }
 
@@ -34,121 +37,148 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 7px 12px;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.08s;
+  gap: 10px;
 }
-.option:hover { background: var(--bg); }
+.option:hover { background: var(--accent-light); }
+.option:not(:last-child) { border-bottom: 1px solid var(--border); }
 
-.optName { font-size: 13px; font-weight: 500; }
-.optTax { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+.optName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.optTax {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .noMatch {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 3px);
   left: 0;
-  min-width: 280px;
+  min-width: 220px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  font-size: 12px;
-  color: var(--text-muted);
-  z-index: 50;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-3);
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
-/* Modal */
+/* ── Modal (new counterparty / new product) ── */
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(26, 25, 23, 0.5);
+  background: rgba(15,17,23,0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: 300;
 }
 
 .modal {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 28px;
-  width: 340px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  padding: 24px 28px;
+  width: 320px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+  animation: slideUp 0.14s ease;
 }
+@keyframes slideUp { from{transform:translateY(5px);opacity:0} to{transform:translateY(0);opacity:1} }
 
 .modalTitle {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 16px;
 }
 
-.field { margin-bottom: 14px; }
+.field { margin-bottom: 12px; }
 
 .label {
   display: block;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-bottom: 5px;
 }
 
 .staticValue {
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 0;
-  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 0;
+  color: var(--text-1);
 }
 
 .modalInput {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 13px;
   font-family: var(--font-mono);
-  color: var(--text);
+  font-feature-settings: 'tnum' 1;
+  color: var(--text-1);
   background: var(--bg);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.12s;
 }
-.modalInput:focus { border-color: var(--accent); }
+.modalInput:focus { border-color: var(--accent); background: var(--surface); }
 
 .error {
-  font-size: 12px;
-  color: var(--danger);
-  background: var(--danger-light);
-  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--neg);
+  background: var(--neg-bg);
+  border: 1px solid var(--neg-border);
+  padding: 6px 9px;
   border-radius: var(--radius);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .btnCancel {
-  padding: 7px 16px;
-  font-size: 13px;
-  border: 1px solid var(--border);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  color: var(--text-muted);
+  color: var(--text-2);
   background: var(--surface);
   transition: background 0.1s;
 }
-.btnCancel:hover { background: var(--bg); }
+.btnCancel:hover { background: var(--surface-2); }
 
 .btnConfirm {
-  padding: 7px 16px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
   border-radius: var(--radius);
   background: var(--chrome);
   color: var(--chrome-text);
-  transition: opacity 0.15s;
+  border: none;
+  transition: opacity 0.12s;
 }
 .btnConfirm:hover { opacity: 0.85; }

@@ -1,40 +1,101 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #F5F4F0;
-  --surface: #FFFFFF;
-  --border: #E2E0D8;
-  --border-strong: #C8C5B8;
-  --text: #1A1917;
-  --text-muted: #7A7870;
-  --text-faint: #B0AEA6;
-  --accent: #C17B2A;
-  --accent-light: #FDF3E3;
-  --accent-border: #E8C48A;
-  --danger: #C0392B;
-  --danger-light: #FDF0EE;
-  --success: #1D6B45;
-  --chrome: #1A1917;
-  --chrome-text: #F5F4F0;
-  --chrome-muted: #7A7870;
-  --day-active: #1A1917;
-  --day-empty: #D8D6CE;
-  --font-ui: 'DM Sans', sans-serif;
-  --font-mono: 'DM Mono', monospace;
-  --radius: 6px;
-  --radius-lg: 10px;
+  /* ── Background layers ── */
+  --bg:           #F4F5F7;   /* page canvas — cool off-white */
+  --surface:      #FFFFFF;   /* cards, panels */
+  --surface-2:    #F0F1F3;   /* sub-panels, alternating rows */
+  --surface-3:    #E8E9EC;   /* borders, dividers */
+
+  /* ── Chrome (header/nav) ── */
+  --chrome:       #1B1D23;   /* near-black, not pure black — easier on eyes */
+  --chrome-2:     #252830;   /* secondary chrome */
+  --chrome-text:  #E8ECF0;
+  --chrome-muted: #7C8494;
+  --chrome-dim:   #3D414D;
+
+  /* ── Text hierarchy ── */
+  --text-1:       #0F1117;   /* primary — headings, key values */
+  --text-2:       #3C4157;   /* body */
+  --text-3:       #6B7280;   /* secondary, labels */
+  --text-4:       #9EA8B8;   /* disabled, placeholders */
+
+  /* ── Semantic: Entry / Purchase (cool blue) ── */
+  --entry-bg:     #EDF2FF;
+  --entry-bg-2:   #E0E9FF;
+  --entry-border: #B4C6F0;
+  --entry-text:   #2B4BA0;
+  --entry-accent: #3B5FCC;
+
+  /* ── Semantic: Exit / Sale (warm amber) ── */
+  --exit-bg:      #FFF7E6;
+  --exit-bg-2:    #FFEDC2;
+  --exit-border:  #F5CE80;
+  --exit-text:    #92520A;
+  --exit-accent:  #C47B12;
+
+  /* ── Semantic: Positive / Stock gain ── */
+  --pos:          #0F7B4D;
+  --pos-bg:       #E8F5EE;
+  --pos-border:   #8DCBAD;
+
+  /* ── Semantic: Negative / Stock loss ── */
+  --neg:          #C0392B;
+  --neg-bg:       #FDECEA;
+  --neg-border:   #F5ABAB;
+
+  /* ── Semantic: Accent / Action ── */
+  --accent:       #2B63D4;   /* primary CTA — visible, not garish */
+  --accent-light: #EDF2FF;
+  --accent-hover: #1D50B8;
+
+  /* ── Semantic: Ledger closed (purple) ── */
+  --ledger-bg:    #EDE8FF;
+  --ledger-text:  #5534B5;
+  --ledger-border:#B8A8F0;
+  --ledger-dark:  #2E1F6E;
+
+  /* ── Semantic: Warning / Edit mode ── */
+  --edit-bg:      #FFFBF0;
+  --edit-border:  #F0D880;
+
+  /* ── Borders ── */
+  --border:       #DDE1E8;
+  --border-2:     #C8CDD8;
+  --border-3:     #A8B0C0;
+
+  /* ── Typography ── */
+  --font-ui:      'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Fira Code', monospace;
+
+  /* ── Spacing scale ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* ── Radius ── */
+  --radius:    5px;
+  --radius-lg: 8px;
+
+  /* ── Row heights (compact = more data visible) ── */
+  --row-h:     34px;
+  --row-h-sm:  28px;
 }
 
 html, body, #root {
   height: 100%;
   font-family: var(--font-ui);
   background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 1, 'kern' 1; /* tabular numerals globally */
 }
 
 button {
@@ -46,10 +107,19 @@ button {
 
 input, select, textarea {
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 13px;
+  font-feature-settings: 'tnum' 1;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Scrollbar — thin, unobtrusive */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-3); }
+
+/* Utility: monospaced numbers with tabular figures */
+.num {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
+  font-size: 12px;
+}

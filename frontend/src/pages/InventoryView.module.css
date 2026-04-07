@@ -2,45 +2,44 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 28px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 
 .filterInput {
-  width: 280px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
+  width: 260px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  font-size: 14px;
+  font-size: 13px;
   font-family: var(--font-ui);
-  color: var(--text);
+  color: var(--text-1);
   background: var(--bg);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.12s, background 0.12s;
 }
 .filterInput:focus {
   border-color: var(--accent);
   background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(43,99,212,0.1);
 }
-.filterInput::placeholder {
-  color: var(--text-faint);
-}
+.filterInput::placeholder { color: var(--text-4); }
 
 .filterClear {
-  font-size: 16px;
-  color: var(--text-muted);
+  font-size: 14px;
+  color: var(--text-3);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 2px;
   line-height: 1;
-  transition: color 0.12s;
+  transition: color 0.1s;
 }
-.filterClear:hover { color: var(--danger); }
+.filterClear:hover { color: var(--neg); }
 
 .filterCount {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-left: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-left: 2px;
 }

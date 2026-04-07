@@ -1,85 +1,182 @@
+/* ── Summary pages (Monthly, Yearly, Inventory) ─────────────────────────── */
+
 .page { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
 
+/* ── Header ── */
 .header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 28px; background: var(--chrome); color: var(--chrome-text);
-  border-bottom: 1px solid #2e2d2b; position: sticky; top: 0; z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--chrome);
+  color: var(--chrome-text);
+  border-bottom: 1px solid var(--chrome-dim);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: 48px;
 }
-.headerLeft { display: flex; align-items: center; gap: 16px; }
-.headerRight { display: flex; align-items: center; gap: 8px; }
+.headerLeft { display: flex; align-items: center; gap: 14px; }
+.headerRight { display: flex; align-items: center; gap: 6px; }
 
 .backBtn {
-  font-size: 13px; color: var(--chrome-muted); padding: 5px 10px;
-  border: 1px solid #2e2d2b; border-radius: var(--radius); background: transparent; transition: color 0.15s;
+  font-size: 12px;
+  color: var(--chrome-muted);
+  padding: 4px 10px;
+  border: 1px solid var(--chrome-dim);
+  border-radius: var(--radius);
+  background: transparent;
+  transition: color 0.12s, border-color 0.12s;
+  white-space: nowrap;
 }
-.backBtn:hover { color: var(--chrome-text); }
+.backBtn:hover { color: var(--chrome-text); border-color: #5a5f6e; }
+
 .titleBlock { display: flex; flex-direction: column; gap: 1px; }
-.mainTitle { font-size: 15px; font-weight: 500; }
-.subTitle { font-size: 12px; color: var(--chrome-muted); }
+.mainTitle { font-size: 14px; font-weight: 600; color: var(--chrome-text); }
+.subTitle { font-size: 11px; color: var(--chrome-muted); }
 
 .exportBtn {
-  font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius);
-  background: transparent; color: var(--chrome-muted); border: 1px solid #3a3937;
-  cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--chrome-muted);
+  border: 1px solid var(--chrome-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
 }
-.exportBtn:hover { color: var(--chrome-text); border-color: #5a5855; }
+.exportBtn:hover { color: var(--chrome-text); border-color: #5a5f6e; }
 
-.tableWrap { flex: 1; overflow-x: auto; padding: 28px; }
-.empty { text-align: center; padding: 48px; color: var(--text-muted); font-size: 13px; }
+/* ── Table area ── */
+.tableWrap {
+  flex: 1;
+  overflow-x: auto;
+  padding: 20px;
+}
+
+.empty {
+  text-align: center;
+  padding: 48px;
+  color: var(--text-3);
+  font-size: 13px;
+}
 .errorBar {
-  background: var(--danger-light); color: var(--danger);
-  font-size: 13px; padding: 10px 28px; border-bottom: 1px solid #f5c0bb;
-}
-
-.table {
-  width: 100%; border-collapse: collapse; background: var(--surface);
-  border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); min-width: 700px;
-}
-.th {
-  padding: 10px 14px; font-size: 10px; font-weight: 600;
-  letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--text-muted); background: var(--bg);
-  border-bottom: 1px solid var(--border); white-space: nowrap;
-}
-.row { transition: background 0.1s; }
-.row:hover td { background: #FAFAF7; }
-.td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
-
-.left { text-align: left; }
-.right { text-align: right; }
-.mono { font-family: var(--font-mono); }
-.muted { color: var(--text-muted); }
-.bold { font-weight: 500; }
-.label { font-weight: 500; }
-.pos { color: var(--success); font-family: var(--font-mono); }
-.neg { color: var(--danger); font-family: var(--font-mono); }
-.stockCol { background: #F8F7F2; border-left: 2px solid var(--border-strong); }
-
-/* ── Tfoot totals rows ── */
-.prevTotalsRow td {
-  background: #f5f4f0;
-  border-top: 2px solid var(--border-strong);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 14px;
+  background: var(--neg-bg);
+  color: var(--neg);
   font-size: 12px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--neg-border);
 }
-.prevTotalsRow .stockCol { background: #eeede8; border-left: 2px solid var(--border-strong); }
 
+/* ── Table ── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  min-width: 680px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.th {
+  padding: 7px 12px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-bottom: 1.5px solid var(--border);
+  white-space: nowrap;
+}
+
+/* Data rows */
+.row { transition: background 0.08s; }
+.row:hover td { background: var(--surface-2); }
+.row:nth-child(even) td { background: #FAFBFC; }
+.row:nth-child(even):hover td { background: var(--surface-2); }
+
+.td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  vertical-align: middle;
+  color: var(--text-2);
+}
+
+/* ── Alignment ── */
+.left  { text-align: left; }
+.right { text-align: right; }
+.mono  {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-feature-settings: 'tnum' 1;
+}
+.muted { color: var(--text-3); }
+.bold  { font-weight: 600; color: var(--text-1); }
+.label { font-weight: 600; color: var(--text-1); }
+
+/* Semantic value colors */
+.pos { color: var(--pos); font-family: var(--font-mono); font-feature-settings: 'tnum' 1; font-weight: 600; }
+.neg { color: var(--neg); font-family: var(--font-mono); font-feature-settings: 'tnum' 1; font-weight: 600; }
+
+/* Stock column — slightly emphasized */
+.stockCol {
+  background: #F0F2FF;
+  border-left: 2px solid var(--entry-border);
+  color: var(--entry-text);
+}
+.row:hover .stockCol { background: #E8EBFF; }
+
+/* ── Footer totals rows ── */
+
+/* Previous period — neutral gray */
+.prevTotalsRow td {
+  background: var(--surface-2);
+  border-top: 2px solid var(--border-2);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 12px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.prevTotalsRow .stockCol {
+  background: #EAECF8;
+  border-left: 2px solid var(--entry-border);
+}
+.prevTotalsRow .mono {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Current period — chrome treatment for maximum contrast / importance */
 .periodTotalsRow td {
   background: var(--chrome);
   color: var(--chrome-text);
-  border-top: 2px solid #3a3937;
+  border-top: 2px solid var(--chrome-dim);
   border-bottom: none;
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 8px 12px;
+  font-size: 12px;
 }
-.periodTotalsRow .mono { font-family: var(--font-mono); color: var(--chrome-text); }
+.periodTotalsRow .mono {
+  color: var(--chrome-text);
+  font-size: 12px;
+  font-weight: 600;
+}
 .periodTotalsRow .muted { color: var(--chrome-muted); }
-.periodTotalsRow .bold { font-weight: 600; }
+.periodTotalsRow .bold  { color: var(--chrome-text); font-weight: 700; }
 .periodTotalsRow .stockCol {
-  background: #2e2d2b;
-  border-left: 2px solid #3a3937;
-  color: var(--accent);
+  background: var(--chrome-2);
+  border-left: 2px solid var(--chrome-dim);
+  color: #60C89A; /* accent green — stock value */
 }
 
-.totalsLabel { font-weight: 600; font-size: 12px; letter-spacing: 0.02em; }
+.totalsLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-1);
+}
+.periodTotalsRow .totalsLabel { color: var(--chrome-text); }
