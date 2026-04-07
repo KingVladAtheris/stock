@@ -3,88 +3,82 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* ── Background layers ── */
-  --bg:           #F4F5F7;   /* page canvas — cool off-white */
-  --surface:      #FFFFFF;   /* cards, panels */
-  --surface-2:    #F0F1F3;   /* sub-panels, alternating rows */
-  --surface-3:    #E8E9EC;   /* borders, dividers */
+  /* ── Backgrounds ── */
+  --bg:           #F4F5F7;
+  --surface:      #FFFFFF;
+  --surface-2:    #F0F2F5;
+  --surface-3:    #E8EBF0;
 
-  /* ── Chrome (header/nav) ── */
-  --chrome:       #1B1D23;   /* near-black, not pure black — easier on eyes */
-  --chrome-2:     #252830;   /* secondary chrome */
-  --chrome-text:  #E8ECF0;
-  --chrome-muted: #7C8494;
-  --chrome-dim:   #3D414D;
+  /* ── Chrome (topbar/nav) ── */
+  --chrome:       #1A1D26;
+  --chrome-2:     #22273A;
+  --chrome-text:  #E8ECF4;
+  --chrome-muted: #7A84A0;
+  --chrome-dim:   #383E52;
 
-  /* ── Text hierarchy ── */
-  --text-1:       #0F1117;   /* primary — headings, key values */
-  --text-2:       #3C4157;   /* body */
-  --text-3:       #6B7280;   /* secondary, labels */
-  --text-4:       #9EA8B8;   /* disabled, placeholders */
+  /* ── Text ── */
+  --text-1:       #0D1117;
+  --text-2:       #2C3347;
+  --text-3:       #64728C;
+  --text-4:       #9DA8BC;
 
-  /* ── Semantic: Entry / Purchase (cool blue) ── */
-  --entry-bg:     #EDF2FF;
-  --entry-bg-2:   #E0E9FF;
-  --entry-border: #B4C6F0;
-  --entry-text:   #2B4BA0;
-  --entry-accent: #3B5FCC;
-
-  /* ── Semantic: Exit / Sale (warm amber) ── */
-  --exit-bg:      #FFF7E6;
-  --exit-bg-2:    #FFEDC2;
-  --exit-border:  #F5CE80;
-  --exit-text:    #92520A;
-  --exit-accent:  #C47B12;
-
-  /* ── Semantic: Positive / Stock gain ── */
-  --pos:          #0F7B4D;
-  --pos-bg:       #E8F5EE;
-  --pos-border:   #8DCBAD;
-
-  /* ── Semantic: Negative / Stock loss ── */
-  --neg:          #C0392B;
-  --neg-bg:       #FDECEA;
-  --neg-border:   #F5ABAB;
-
-  /* ── Semantic: Accent / Action ── */
-  --accent:       #2B63D4;   /* primary CTA — visible, not garish */
-  --accent-light: #EDF2FF;
+  /* ── Accent (primary action, blue) ── */
+  --accent:       #2B63D4;
+  --accent-light: #EEF3FF;
   --accent-hover: #1D50B8;
+  --accent-text:  #1A3F9B;
+  --accent-border:#B8CCF4;
 
-  /* ── Semantic: Ledger closed (purple) ── */
+  /* ── Entry section (blue tint) ── */
+  --entry-bg:     #F0F5FF;
+  --entry-bg-2:   #E5EDFF;
+  --entry-border: #C0D0F0;
+  --entry-text:   #1A3A8C;
+
+  /* ── Exit section (teal tint) ── */
+  --exit-bg:      #F0FAFA;
+  --exit-bg-2:    #E0F4F4;
+  --exit-border:  #A8D8D8;
+  --exit-text:    #0A5A5A;
+
+  /* ── Positive / green ── */
+  --pos:          #0A6E3F;
+  --pos-bg:       #E8F7EF;
+  --pos-border:   #90CEB0;
+
+  /* ── Negative / red ── */
+  --neg:          #B83232;
+  --neg-bg:       #FDF0F0;
+  --neg-border:   #F0AAAA;
+
+  /* ── Ledger closed ── */
   --ledger-bg:    #EDE8FF;
   --ledger-text:  #5534B5;
   --ledger-border:#B8A8F0;
-  --ledger-dark:  #2E1F6E;
+  --ledger-dark:  #2A1A6E;
 
-  /* ── Semantic: Warning / Edit mode ── */
+  /* ── Edit mode ── */
   --edit-bg:      #FFFBF0;
-  --edit-border:  #F0D880;
+  --edit-border:  #EED870;
 
   /* ── Borders ── */
-  --border:       #DDE1E8;
+  --border:       #DDE1EB;
   --border-2:     #C8CDD8;
-  --border-3:     #A8B0C0;
+  --border-3:     #A4AABF;
 
   /* ── Typography ── */
   --font-ui:      'IBM Plex Sans', system-ui, sans-serif;
   --font-mono:    'IBM Plex Mono', 'Fira Code', monospace;
 
-  /* ── Spacing scale ── */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-
-  /* ── Radius ── */
+  /* ── Radii ── */
   --radius:    5px;
-  --radius-lg: 8px;
+  --radius-lg: 9px;
+  --radius-xl: 14px;
 
-  /* ── Row heights (compact = more data visible) ── */
-  --row-h:     34px;
-  --row-h-sm:  28px;
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 3px rgba(13,17,23,0.08), 0 1px 2px rgba(13,17,23,0.04);
+  --shadow:    0 4px 12px rgba(13,17,23,0.10), 0 2px 4px rgba(13,17,23,0.06);
+  --shadow-lg: 0 16px 40px rgba(13,17,23,0.14), 0 4px 12px rgba(13,17,23,0.08);
 }
 
 html, body, #root {
@@ -93,33 +87,19 @@ html, body, #root {
   background: var(--bg);
   color: var(--text-2);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'tnum' 1, 'kern' 1; /* tabular numerals globally */
+  font-feature-settings: 'kern' 1;
 }
 
-button {
-  font-family: var(--font-ui);
-  cursor: pointer;
-  border: none;
-  background: none;
-}
+button { font-family: var(--font-ui); cursor: pointer; border: none; background: none; }
+input, select, textarea { font-family: var(--font-ui); font-size: 13px; }
 
-input, select, textarea {
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-feature-settings: 'tnum' 1;
-}
+/* Tabular numerals for mono elements */
+.mono, [class*="mono"] { font-feature-settings: 'tnum' 1; }
 
-/* Scrollbar — thin, unobtrusive */
+/* Thin scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-3); }
-
-/* Utility: monospaced numbers with tabular figures */
-.num {
-  font-family: var(--font-mono);
-  font-feature-settings: 'tnum' 1;
-  font-size: 12px;
-}
