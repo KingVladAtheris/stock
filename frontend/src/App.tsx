@@ -12,11 +12,11 @@ import './index.css';
 type View = 'companies' | 'calendar' | 'day' | 'monthly' | 'yearly' | 'inventory';
 
 export default function App() {
-  const [view, setView]           = useState<View>('companies');
-  const [company, setCompany]     = useState<Company | null>(null);
+  const [view,         setView]         = useState<View>('companies');
+  const [company,      setCompany]      = useState<Company | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
-  const [activeDays, setActiveDays]     = useState<Set<string>>(new Set());
-  const [summaryYear, setSummaryYear]   = useState(0);
+  const [activeDays,   setActiveDays]   = useState<Set<string>>(new Set());
+  const [summaryYear,  setSummaryYear]  = useState(0);
   const [summaryMonth, setSummaryMonth] = useState(0);
 
   const refreshActiveDays = async (cid: number) => {
@@ -31,6 +31,7 @@ export default function App() {
   };
 
   const backToCalendar = async () => {
+    // Re-fetch company list to pick up any ledger changes made elsewhere
     if (company) await refreshActiveDays(company.id);
     setView('calendar');
   };
@@ -39,7 +40,7 @@ export default function App() {
 
   if (view === 'calendar' && company) return (
     <Calendar
-      companyName={company.name}
+      company={company}
       activeDays={activeDays}
       onDayClick={d => { setSelectedDate(d); setView('day'); }}
       onBack={() => setView('companies')}
