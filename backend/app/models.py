@@ -4,21 +4,35 @@ from sqlalchemy.orm import relationship
 from .database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+    id             = Column(Integer, primary_key=True, index=True)
+    email          = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+
+    companies = relationship("Company", back_populates="owner", cascade="all, delete-orphan")
+
+
 class Company(Base):
     __tablename__ = "companies"
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)   # ← ownership
     name = Column(String, nullable=False)
-    tax_id = Column(String, unique=True, nullable=False)
+    tax_id = Column(String, nullable=False)
     chamber_id = Column(String)
     opening_stock_no_vat = Column(Numeric(14, 2), nullable=False, default=0)
     opening_stock_vat    = Column(Numeric(14, 2), nullable=False, default=0)
     opening_stock_total  = Column(Numeric(14, 2), nullable=False, default=0)
     ledger_closed_date   = Column(Date, nullable=True, default=None)
 
+    owner        = relationship("User", back_populates="companies")
     transactions = relationship("Transaction", back_populates="company", cascade="all, delete-orphan")
     exits        = relationship("Exit",        back_populates="company", cascade="all, delete-orphan")
     products     = relationship("Product",     back_populates="company", cascade="all, delete-orphan")
     inventory    = relationship("Inventory",   back_populates="company", cascade="all, delete-orphan")
+
+    # tax_id unique per user, not globally
+    __table_args__ = (UniqueConstraint("user_id", "tax_id", name="uix_user_company_taxid"),)
 
 
 class Counterparty(Base):

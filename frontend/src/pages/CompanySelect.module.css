@@ -43,6 +43,14 @@
   letter-spacing: -0.02em;
 }
 
+.btnLogout {
+  font-size: 12px; font-weight: 500; color: var(--text-3);
+  padding: 6px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: transparent; cursor: pointer;
+  transition: all 0.12s;
+}
+.btnLogout:hover { color: var(--neg); border-color: var(--neg-border); background: var(--neg-bg); }
+
 .btnNew {
   font-size: 12px;
   font-weight: 500;

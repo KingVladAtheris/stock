@@ -1,9 +1,31 @@
 # backend/app/schemas.py
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
+
+# ── Auth ───────────────────────────────────────────────────────────────────
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str   # min length enforced in the endpoint
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    class Config: from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+# ── Counterparty ───────────────────────────────────────────────────────────
 
 class CounterpartyCreate(BaseModel):
     name: str
@@ -16,6 +38,8 @@ class Counterparty(CounterpartyCreate):
 SellerCreate = CounterpartyCreate
 Seller = Counterparty
 
+
+# ── Company ────────────────────────────────────────────────────────────────
 
 class CompanyCreate(BaseModel):
     name: str
@@ -37,6 +61,8 @@ class Company(BaseModel):
     class Config: from_attributes = True
 
 
+# ── Product ────────────────────────────────────────────────────────────────
+
 class ProductCreate(BaseModel):
     name: str
 
@@ -47,6 +73,8 @@ class Product(BaseModel):
     class Config: from_attributes = True
 
 
+# ── Inventory ──────────────────────────────────────────────────────────────
+
 class InventoryItem(BaseModel):
     product_id:   int
     product_name: str
@@ -54,6 +82,8 @@ class InventoryItem(BaseModel):
     stock_vat:    Decimal
     stock_total:  Decimal
 
+
+# ── Transaction items ──────────────────────────────────────────────────────
 
 class TransactionItemCreate(BaseModel):
     product_id:          int
@@ -72,6 +102,8 @@ class TransactionItemSchema(TransactionItemCreate):
     product:        Optional[Product] = None
     class Config: from_attributes = True
 
+
+# ── Transaction ────────────────────────────────────────────────────────────
 
 class TransactionCreate(BaseModel):
     seller_id:             int
@@ -93,18 +125,22 @@ class Transaction(TransactionCreate):
     class Config: from_attributes = True
 
 
+# ── Exit items ─────────────────────────────────────────────────────────────
+
 class ExitItemCreate(BaseModel):
     product_id: int
     total_sale: Decimal
     vat_amount: Decimal
 
 class ExitItemSchema(ExitItemCreate):
-    id:               int
-    exit_id:          int
+    id:                int
+    exit_id:           int
     total_sale_no_vat: Decimal
-    product:          Optional[Product] = None
+    product:           Optional[Product] = None
     class Config: from_attributes = True
 
+
+# ── Exit ──────────────────────────────────────────────────────────────────
 
 class ExitCreate(BaseModel):
     buyer_id:        int
@@ -121,16 +157,18 @@ class ExitSchema(ExitCreate):
     class Config: from_attributes = True
 
 
+# ── Stock ──────────────────────────────────────────────────────────────────
+
 class StockTriple(BaseModel):
-    no_vat: Decimal
-    vat:    Decimal
-    total:  Decimal
+    no_vat: Decimal; vat: Decimal; total: Decimal
 
 
 class PeriodTotals(BaseModel):
     resale_no_tax: Decimal; resale_vat: Decimal; total_resale: Decimal
     exit_no_vat:   Decimal; exit_vat:   Decimal; total_exit:   Decimal
 
+
+# ── Daily report ───────────────────────────────────────────────────────────
 
 class DailyReport(BaseModel):
     date:         date
@@ -144,6 +182,8 @@ class DailyReport(BaseModel):
     stock_end_of_day: StockTriple
     prev_totals: PeriodTotals
 
+
+# ── Summary ────────────────────────────────────────────────────────────────
 
 class DaySummary(BaseModel):
     date: str

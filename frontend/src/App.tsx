@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Company } from './types';
-import { getActiveDays } from './api';
+import { getToken, logout, getActiveDays, closeLedger, reopenLedger } from './api';
+import AuthPage from './pages/AuthPage';
 import CompanySelect from './pages/CompanySelect';
 import Calendar from './components/Calendar';
 import DayView from './pages/DayView';
@@ -12,12 +13,29 @@ import './index.css';
 type View = 'companies' | 'calendar' | 'day' | 'monthly' | 'yearly' | 'inventory';
 
 export default function App() {
+  // Auth gate — token presence is the source of truth
+  const [authed, setAuthed] = useState<boolean>(() => !!getToken());
+
   const [view,         setView]         = useState<View>('companies');
   const [company,      setCompany]      = useState<Company | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const [activeDays,   setActiveDays]   = useState<Set<string>>(new Set());
   const [summaryYear,  setSummaryYear]  = useState(0);
   const [summaryMonth, setSummaryMonth] = useState(0);
+
+  // If token disappears (e.g. cleared by 401 handler), drop back to auth screen
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!getToken() && authed) { setAuthed(false); setView('companies'); setCompany(null); }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [authed]);
+
+  if (!authed) {
+    return <AuthPage onAuth={() => setAuthed(true)} />;
+  }
+
+  const handleLogout = () => { logout(); setAuthed(false); setView('companies'); setCompany(null); };
 
   const refreshActiveDays = async (cid: number) => {
     const days = await getActiveDays(cid);
@@ -30,13 +48,17 @@ export default function App() {
     setView('calendar');
   };
 
+  // Keep company object fresh after ledger changes
+  const updateCompany = (updated: Company) => setCompany(updated);
+
   const backToCalendar = async () => {
-    // Re-fetch company list to pick up any ledger changes made elsewhere
     if (company) await refreshActiveDays(company.id);
     setView('calendar');
   };
 
-  if (view === 'companies') return <CompanySelect onSelect={selectCompany} />;
+  if (view === 'companies') return (
+    <CompanySelect onSelect={selectCompany} onLogout={handleLogout} />
+  );
 
   if (view === 'calendar' && company) return (
     <Calendar
@@ -44,7 +66,7 @@ export default function App() {
       activeDays={activeDays}
       onDayClick={d => { setSelectedDate(d); setView('day'); }}
       onBack={() => setView('companies')}
-      onMonthSummary={(y,m) => { setSummaryYear(y); setSummaryMonth(m); setView('monthly'); }}
+      onMonthSummary={(y, m) => { setSummaryYear(y); setSummaryMonth(m); setView('monthly'); }}
       onYearSummary={y => { setSummaryYear(y); setView('yearly'); }}
       onInventory={() => setView('inventory')}
     />

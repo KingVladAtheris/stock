@@ -6,7 +6,7 @@ import styles from './CompanySelect.module.css';
 
 const BASE = 'http://localhost:8000';
 
-interface Props { onSelect: (company: Company) => void; }
+interface Props { onSelect: (company: Company) => void; onLogout: () => void; }
 type ModalMode = 'create' | 'edit' | 'delete' | 'close_ledger' | null;
 
 interface StockForm { no_vat: string; vat: string; total: string; }
@@ -14,7 +14,7 @@ const emptyStock = (): StockForm => ({ no_vat: '', vat: '', total: '' });
 
 const MONTHS = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 
-export default function CompanySelect({ onSelect }: Props) {
+export default function CompanySelect({ onSelect, onLogout }: Props) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [target, setTarget] = useState<Company | null>(null);
@@ -120,7 +120,10 @@ export default function CompanySelect({ onSelect }: Props) {
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2>Companii</h2>
-            <button className={styles.btnNew} onClick={openCreate}>+ Companie nouă</button>
+            <div style={{display:'flex',gap:8}}>
+              <button className={styles.btnLogout} onClick={onLogout} title="Deconectare">⎋ Ieșire</button>
+              <button className={styles.btnNew} onClick={openCreate}>+ Companie nouă</button>
+            </div>
           </div>
           {loading ? <div className={styles.empty}>Se încarcă...</div>
             : companies.length===0 ? <div className={styles.empty}>Nicio companie înregistrată.</div>

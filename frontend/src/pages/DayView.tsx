@@ -389,6 +389,8 @@ export default function DayView({ company, date, onBack }: Props) {
   const exitItemHeaderRow = (
     <tr className={styles.itemHeaderRow}>
       <td className={`${styles.td} ${styles.itemIndent} ${styles.muted}`} style={ihStyle}>Produs</td>
+      <td className={styles.td}/>
+      <td className={styles.td}/>
       <td className={`${styles.td} ${styles.right} ${styles.muted}`} style={ihStyle}>Total cu TVA</td>
       <td className={`${styles.td} ${styles.right} ${styles.muted}`} style={ihStyle}>TVA</td>
       <td className={`${styles.td} ${styles.right} ${styles.muted}`} style={ihStyle}>Fără TVA</td>
@@ -425,6 +427,8 @@ export default function DayView({ company, date, onBack }: Props) {
     return (
       <tr key={item.id} className={styles.itemRow}>
         <td className={`${styles.td} ${styles.itemIndent}`}><span className={styles.productName}>{prod?.name??'—'}</span></td>
+        <td className={styles.td}/>
+        <td className={styles.td}/>
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.boldTotal}`}>{fmt(item.total_sale)}</td>
         <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(item.vat_amount)}</td>
         <td className={`${styles.td} ${styles.right} ${styles.mono}`}>{fmt(item.total_sale_no_vat)}</td>
@@ -449,6 +453,8 @@ export default function DayView({ company, date, onBack }: Props) {
           <ProductSearch companyId={company.id} products={invProds} onSelect={pr=>setDraftExitItems(p=>({...p,[exId]:{...p[exId]!,product:pr}}))} onProductCreated={()=>setError('Nu poți adăuga produse noi din ieșiri.')} placeholder="Caută în inventar..."/>
           {d.product&&<div className={styles.selectedSeller}><span>{d.product.name}</span><button className={styles.clearSeller} onClick={()=>setDraftExitItems(p=>({...p,[exId]:{...p[exId]!,product:null}}))}>×</button></div>}
         </td>
+        <td className={styles.td}/>
+        <td className={styles.td}/>
         <td className={styles.td}><input className={`${styles.cellInput} ${styles.right} ${styles.mono}`} type="number" min="0" step="0.01" value={d.total_sale} placeholder="0.00" onChange={e=>setDraftExitItems(p=>({...p,[exId]:{...p[exId]!,total_sale:e.target.value}}))} onKeyDown={e=>{if(e.key==='Enter'&&valid)submitNewExitItem(exId);}}/></td>
         <td className={styles.td}><input className={`${styles.cellInput} ${styles.right} ${styles.mono}`} type="number" min="0" step="0.01" value={d.vat_amount} placeholder="0.00" onChange={e=>setDraftExitItems(p=>({...p,[exId]:{...p[exId]!,vat_amount:e.target.value}}))}/></td>
         <td className={`${styles.td} ${styles.right} ${styles.mono} ${styles.computed}`}>{pre.c_no_vat?fmt(pre.c_no_vat):'—'}</td>

@@ -1,7 +1,14 @@
+// Auth
+export interface UserOut { id: number; email: string; }
+export interface Token { access_token: string; token_type: string; }
+export interface LoginRequest { email: string; password: string; }
+export interface RegisterRequest { email: string; password: string; }
+
+// Company
 export interface Company {
   id: number; name: string; tax_id: string; chamber_id?: string;
   opening_stock_no_vat: string; opening_stock_vat: string; opening_stock_total: string;
-  ledger_closed_date?: string | null; // ISO date or null
+  ledger_closed_date?: string | null;
 }
 export interface CompanyCreate {
   name: string; tax_id: string; chamber_id?: string;
